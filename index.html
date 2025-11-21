@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Gastos Pessoais</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <style>
+        :root {
+            --primary-color: #4361ee;
+            --secondary-color: #3f37c9;
+            --success-color: #4cc9f0;
+            --danger-color: #f72585;
+            --warning-color: #f8961e;
+            --light-color: #f8f9fa;
+            --dark-color: #212529;
+        }
+        
+        body {
+            background-color: #f5f7fb;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+        
+        .card {
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            border: none;
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            background-color: white;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            font-weight: 600;
+            border-radius: 12px 12px 0 0 !important;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--secondary-color);
+            border-color: var(--secondary-color);
+        }
+        
+        .nav-pills .nav-link.active {
+            background-color: var(--primary-color);
+        }
+        
+        .nav-pills .nav-link {
+            color: var(--dark-color);
+        }
+        
+        .table th {
+            border-top: none;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            background-color: white;
+        }
+        
+        .summary-card {
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .paid {
+            text-decoration: line-through;
+            color: #6c757d;
+        }
+        
+        .paid-badge {
+            background-color: var(--success-color);
+        }
+        
+        .expense-item {
+            border-left: 4px solid var(--warning-color);
+            padding-left: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .loan-item {
+            border-left: 4px solid var(--danger-color);
+            padding-left: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .tab-content {
+            padding-top: 20px;
+        }
+        
+        .month-selector {
+            max-width: 200px;
+        }
+        
+        .total-amount {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Section -->
+    <div id="login-section" class="container">
+        <div class="login-container">
+            <h2 class="text-center mb-4">Controle de Gastos</h2>
+            <form id="login-form">
+                <div class="mb-3">
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" class="form-control" id="email" required>
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label">Senha</label>
+                    <input type="password" class="form-control" id="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 mb-3">Entrar</button>
+                <button type="button" id="register-btn" class="btn btn-outline-primary w-100">Criar Conta</button>
+            </form>
+            <div id="login-message" class="mt-3"></div>
+        </div>
+    </div>
+
+    <!-- Main App Section -->
+    <div id="app-section" class="container-fluid" style="display: none;">
+        <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+            <div class="container">
+                <a class="navbar-brand" href="#">
+                    <i class="fas fa-chart-pie me-2"></i>Controle de Gastos
+                </a>
+                <div class="d-flex align-items-center">
+                    <span id="user-email" class="me-3"></span>
+                    <button id="logout-btn" class="btn btn-outline-secondary btn-sm">Sair</button>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container mt-4">
+            <ul class="nav nav-pills mb-4" id="pills-tab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="pills-fixed-tab" data-bs-toggle="pill" data-bs-target="#pills-fixed" type="button" role="tab">Gastos Fixos</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="pills-sicredi-tab" data-bs-toggle="pill" data-bs-target="#pills-sicredi" type="button" role="tab">Sicredi</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="pills-porto-tab" data-bs-toggle="pill" data-bs-target="#pills-porto" type="button" role="tab">Porto</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="pills-mp-tab" data-bs-toggle="pill" data-bs-target="#pills-mp" type="button" role="tab">Mercado Pago</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="pills-bills-tab" data-bs-toggle="pill" data-bs-target="#pills-bills" type="button" role="tab">Contas a Pagar</button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="pills-tabContent">
+                <!-- Gastos Fixos Tab -->
+                <div class="tab-pane fade show active" id="pills-fixed" role="tabpanel">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Adicionar Gasto Fixo</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="fixed-expense-form">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label for="fixed-name" class="form-label">Nome do Gasto</label>
+                                            <input type="text" class="form-control" id="fixed-name" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="mb-3">
+                                            <label for="fixed-value" class="form-label">Valor (R$)</label>
+                                            <input type="number" class="form-control" id="fixed-value" step="0.01" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="mb-3">
+                                            <label for="fixed-due-day" class="form-label">Dia de Vencimento</label>
+                                            <input type="number" class="form-control" id="fixed-due-day" min="1" max="31" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end">
+                                        <button type="submit" class="btn btn-primary w-100">Adicionar</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Gastos Fixos Cadastrados</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Nome</th>
+                                            <th>Valor (R$)</th>
+                                            <th>Dia de Vencimento</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="fixed-expenses-list">
+                                        <!-- Fixed expenses will be loaded here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sicredi Tab -->
+                <div class="tab-pane fade" id="pills-sicredi" role="tabpanel">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Adicionar Gasto - Cartão Sicredi</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="sicredi-expense-form">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="mb-3">
+                                            <label for="sicredi-date" class="form-label">Data da Compra</label>
+                                            <input type="date" class="form-control" id="sicredi-date" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="mb-3">
+                                            <label for="sicredi-name" class="form-label">Nome do Gasto</label>
+                                            <input type="text" class="form-control" id="sicredi-name" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="mb-3">
+                                            <label for="sicredi-value" class="form-label">Valor da Parcela (R$)</label>
+                                            <input type="number" class="form-control" id="sicredi-value" step="0.01" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="mb-3">
+                                            <label for="sicredi-installments" class="form-label">Parcelas</label>
+                                            <input type="number" class="form-control" id="sicredi-installments" min="1" value="1" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="mb-3">
+                                            <label for="sicredi-closing-day" class="form-label">Dia do Fechamento</label>
+                                            <input type="number" class="form-control" id="sicredi-closing-day" min="1" max="31" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="sicredi-observation" class="form-label">Observação (Empréstimos)</label>
+                                            <input type="text" class="form-control" id="sicredi-observation" placeholder="Nome da pessoa que emprestou">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 d-flex align-items-end">
+                                        <button type="submit" class="btn btn-primary w-100">Adicionar</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Gastos Sicredi Cadastrados</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Data</th>
+                                            <th>Nome</th>
+                                            <th>Valor Parcela (R$)</th>
+                                            <th>Parcelas</th>
+                                            <th>Observação</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="sicredi-expenses-list">
+                                        <!-- Sicredi expenses will be loaded here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Porto Tab -->
+                <div class="tab-pane fade" id="pills-porto" role="tabpanel">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Adicionar Gasto - Cartão Porto</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="porto-expense-form">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="mb-3">
+                                            <label for="porto-date" class="form-label">Data da Compra</label>
+                                            <input type="date" class="form-control" id="porto-date" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="mb-3">
+                                            <label for="porto-name" class="form-label">Nome do Gasto</label>
+                                            <input type="text" class="form-control" id="porto-name" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="mb-3">
+                                            <label for="porto-value" class="form-label">Valor da Parcela (R$)</label>
+                                            <input type="number" class="form-control" id="porto-value" step="0.01" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="mb-3">
+                                            <label for="porto-installments" class="form-label">Parcelas</label>
+                                            <input type="number" class="form-control" id="porto-installments" min="1" value="1" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="mb-3">
+                                            <label for="porto-closing-day" class="form-label">Dia do Fechamento</label>
+                                            <input type="number" class="form-control" id="porto-closing-day" min="1" max="31" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="porto-observation" class="form-label">Observação (Empréstimos)</label>
+                                            <input type="text" class="form-control" id="porto-observation" placeholder="Nome da pessoa que emprestou">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 d-flex align-items-end">
+                                        <button type="submit" class="btn btn-primary w-100">Adicionar</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Gastos Porto Cadastrados</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Data</th>
+                                            <th>Nome</th>
+                                            <th>Valor Parcela (R$)</th>
+                                            <th>Parcelas</th>
+                                            <th>Observação</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="porto-expenses-list">
+                                        <!-- Porto expenses will be loaded here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mercado Pago Tab -->
+                <div class="tab-pane fade" id="pills-mp" role="tabpanel">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Adicionar Gasto - Cartão Mercado Pago</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="mp-expense-form">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="mb-3">
+                                            <label for="mp-date" class="form-label">Data da Compra</label>
+                                            <input type="date" class="form-control" id="mp-date" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="mb-3">
+                                            <label for="mp-name" class="form-label">Nome do Gasto</label>
+                                            <input type="text" class="form-control" id="mp-name" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="mb-3">
+                                            <label for="mp-value" class="form-label">Valor da Parcela (R$)</label>
+                                            <input type="number" class="form-control" id="mp-value" step="0.01" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="mb-3">
+                                            <label for="mp-installments" class="form-label">Parcelas</label>
+                                            <input type="number" class="form-control" id="mp-installments" min="1" value="1" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="mb-3">
+                                            <label for="mp-closing-day" class="form-label">Dia do Fechamento</label>
+                                            <input type="number" class="form-control" id="mp-closing-day" min="1" max="31" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="mp-observation" class="form-label">Observação (Empréstimos)</label>
+                                            <input type="text" class="form-control" id="mp-observation" placeholder="Nome da pessoa que emprestou">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 d-flex align-items-end">
+                                        <button type="submit" class="btn btn-primary w-100">Adicionar</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Gastos Mercado Pago Cadastrados</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Data</th>
+                                            <th>Nome</th>
+                                            <th>Valor Parcela (R$)</th>
+                                            <th>Parcelas</th>
+                                            <th>Observação</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="mp-expenses-list">
+                                        <!-- Mercado Pago expenses will be loaded here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contas a Pagar Tab -->
+                <div class="tab-pane fade" id="pills-bills" role="tabpanel">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Contas a Pagar</h5>
+                            <div class="d-flex">
+                                <select id="month-selector" class="form-select me-2 month-selector">
+                                    <!-- Months will be populated by JavaScript -->
+                                </select>
+                                <select id="year-selector" class="form-select month-selector">
+                                    <!-- Years will be populated by JavaScript -->
+                                </select>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-4">
+                                <div class="col-md-4">
+                                    <div class="card summary-card">
+                                        <div class="card-body">
+                                            <h6 class="card-title">Gastos Fixos</h6>
+                                            <div id="fixed-summary">
+                                                <!-- Fixed expenses summary will be loaded here -->
+                                            </div>
+                                            <div id="fixed-summary-total" class="mt-2"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card summary-card">
+                                        <div class="card-body">
+                                            <h6 class="card-title">Cartão Sicredi</h6>
+                                            <div id="sicredi-summary">
+                                                <!-- Sicredi summary will be loaded here -->
+                                            </div>
+                                            <div id="sicredi-summary-total" class="mt-2"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card summary-card">
+                                        <div class="card-body">
+                                            <h6 class="card-title">Cartão Porto</h6>
+                                            <div id="porto-summary">
+                                                <!-- Porto summary will be loaded here -->
+                                            </div>
+                                            <div id="porto-summary-total" class="mt-2"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mb-4">
+                                <div class="col-md-4">
+                                    <div class="card summary-card">
+                                        <div class="card-body">
+                                            <h6 class="card-title">Cartão Mercado Pago</h6>
+                                            <div id="mp-summary">
+                                                <!-- Mercado Pago summary will be loaded here -->
+                                            </div>
+                                            <div id="mp-summary-total" class="mt-2"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <div class="card summary-card">
+                                        <div class="card-body">
+                                            <h6 class="card-title">Empréstimos</h6>
+                                            <div id="loans-summary">
+                                                <!-- Loans summary will be loaded here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="card summary-card">
+                                        <div class="card-body">
+                                            <h6 class="card-title">Resumo do Mês</h6>
+                                            <div class="row">
+                                                <div class="col-md-3">
+                                                    <p class="mb-1">Gastos Totais:</p>
+                                                    <p class="total-amount" id="total-expenses">R$ 0,00</p>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <p class="mb-1">Empréstimos:</p>
+                                                    <p class="total-amount" id="total-loans">R$ 0,00</p>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <p class="mb-1">Gastos Reais:</p>
+                                                    <p class="total-amount" id="real-expenses">R$ 0,00</p>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <p class="mb-1">Status:</p>
+                                                    <span id="payment-status" class="badge bg-success">Em dia</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card mt-4">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Detalhamento de Gastos</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="expenses-details">
+                                        <!-- Expenses details will be loaded here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Gasto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="edit-form">
+                        <input type="hidden" id="edit-id">
+                        <input type="hidden" id="edit-type">
+                        <div id="edit-form-fields">
+                            <!-- Form fields will be populated by JavaScript -->
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="save-edit-btn">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // O código JavaScript será enviado na próxima parte
+    </script>
+</body>
+</html>
+<script>
+    // Firebase configuration
+    const firebaseConfig = {
+        apiKey: "AIzaSyDb5NwNxFc6JGr_tZuLW8nMgs32S2BJtYQ",
+        authDomain: "contas-ff2cd.firebaseapp.com",
+        databaseURL: "https://contas-ff2cd-default-rtdb.firebaseio.com",
+        projectId: "contas-ff2cd",
+        storageBucket: "contas-ff2cd.firebasestorage.app",
+        messagingSenderId: "413169667337",
+        appId: "1:413169667337:web:da3c9a09b1d32bb091d7d8"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const database = firebase.database();
+
+    // Global variables
+    let currentUser = null;
+    let currentMonth = new Date().getMonth() + 1;
+    let currentYear = new Date().getFullYear();
+    let summaryData = {
+        fixed: 0,
+        sicredi: 0,
+        porto: 0,
+        mp: 0,
+        loans: 0
+    };
+
+    // DOM elements
+    const loginSection = document.getElementById('login-section');
+    const appSection = document.getElementById('app-section');
+    const loginForm = document.getElementById('login-form');
+    const registerBtn = document.getElementById('register-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const userEmail = document.getElementById('user-email');
+    const loginMessage = document.getElementById('login-message');
+
+    // Authentication functions
+    function showMessage(message, isError = false) {
+        loginMessage.textContent = message;
+        loginMessage.className = `mt-3 alert ${isError ? 'alert-danger' : 'alert-success'}`;
+        setTimeout(() => {
+            loginMessage.textContent = '';
+            loginMessage.className = '';
+        }, 5000);
+    }
+
+    function login(email, password) {
+        auth.signInWithEmailAndPassword(email, password)
+            .then((userCredential) => {
+                currentUser = userCredential.user;
+                showMessage('Login realizado com sucesso!');
+                loadApp();
+            })
+            .catch((error) => {
+                showMessage('Erro no login: ' + error.message, true);
+            });
+    }
+
+    function register(email, password) {
+        auth.createUserWithEmailAndPassword(email, password)
+            .then((userCredential) => {
+                currentUser = userCredential.user;
+                showMessage('Conta criada com sucesso!');
+                loadApp();
+            })
+            .catch((error) => {
+                showMessage('Erro ao criar conta: ' + error.message, true);
+            });
+    }
+
+    function logout() {
+        auth.signOut()
+            .then(() => {
+                currentUser = null;
+                loginSection.style.display = 'block';
+                appSection.style.display = 'none';
+            })
+            .catch((error) => {
+                console.error('Erro ao fazer logout:', error);
+            });
+    }
+
+    function loadApp() {
+        loginSection.style.display = 'none';
+        appSection.style.display = 'block';
+        userEmail.textContent = currentUser.email;
+        
+        // Initialize month and year selectors
+        initializeDateSelectors();
+        
+        // Load all data
+        loadFixedExpenses();
+        loadSicrediExpenses();
+        loadPortoExpenses();
+        loadMPExpenses();
+        updateBillsSummary();
+    }
+
+    // Event listeners for authentication
+    loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        login(email, password);
+    });
+
+    registerBtn.addEventListener('click', () => {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        register(email, password);
+    });
+
+    logoutBtn.addEventListener('click', logout);
+
+    // Check if user is already logged in
+    auth.onAuthStateChanged((user) => {
+        if (user) {
+            currentUser = user;
+            loadApp();
+        }
+    });
+    // Date utility functions
+    function initializeDateSelectors() {
+        const monthSelector = document.getElementById('month-selector');
+        const yearSelector = document.getElementById('year-selector');
+        
+        // Populate months
+        const months = [
+            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+        ];
+        
+        monthSelector.innerHTML = '';
+        months.forEach((month, index) => {
+            const option = document.createElement('option');
+            option.value = index + 1;
+            option.textContent = month;
+            if (index + 1 === currentMonth) {
+                option.selected = true;
+            }
+            monthSelector.appendChild(option);
+        });
+        
+        // Populate years (current year and next year)
+        yearSelector.innerHTML = '';
+        for (let i = currentYear - 1; i <= currentYear + 1; i++) {
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = i;
+            if (i === currentYear) {
+                option.selected = true;
+            }
+            yearSelector.appendChild(option);
+        }
+        
+        // Add event listeners
+        monthSelector.addEventListener('change', () => {
+            currentMonth = parseInt(monthSelector.value);
+            updateBillsSummary();
+        });
+        
+        yearSelector.addEventListener('change', () => {
+            currentYear = parseInt(yearSelector.value);
+            updateBillsSummary();
+        });
+    }
+
+    // Calculate due dates for credit card expenses
+    function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
+        const dueDates = [];
+        const purchase = new Date(purchaseDate);
+        const purchaseDay = purchase.getDate();
+        
+        // Determine the due day based on card type
+        let dueDay;
+        switch(cardType) {
+            case 'sicredi': dueDay = 20; break;
+            case 'porto': dueDay = 15; break;
+            case 'mp': dueDay = 10; break;
+            default: dueDay = 1;
+        }
+        
+        // Determine the first due date
+        let firstDueDate = new Date(purchase);
+        
+        if (purchaseDay > closingDay) {
+            // If purchase is after closing day, first due is next month
+            firstDueDate.setMonth(firstDueDate.getMonth() + 1);
+        }
+        
+        firstDueDate.setDate(dueDay);
+        
+        // Add all installment due dates
+        for (let i = 0; i < installments; i++) {
+            const dueDate = new Date(firstDueDate);
+            dueDate.setMonth(firstDueDate.getMonth() + i);
+            dueDates.push({
+                date: dueDate.toISOString().split('T')[0],
+                month: dueDate.getMonth() + 1,
+                year: dueDate.getFullYear(),
+                installment: i + 1
+            });
+        }
+        
+        return dueDates;
+    }
+
+    // Format currency
+    function formatCurrency(value) {
+        return new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+        }).format(value);
+    }
+
+    // Add event listeners for edit and delete buttons
+    function addEditDeleteListeners() {
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', handleEdit);
+        });
+        
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', handleDelete);
+        });
+    }
+
+    // Handle edit expense
+    function handleEdit(e) {
+        const id = e.target.closest('button').dataset.id;
+        const type = e.target.closest('button').dataset.type;
+        
+        // Load expense data and populate edit modal
+        database.ref(`users/${currentUser.uid}/${type}Expenses/${id}`).once('value')
+            .then((snapshot) => {
+                const expense = snapshot.val();
+                const modal = new bootstrap.Modal(document.getElementById('editModal'));
+                
+                document.getElementById('edit-id').value = id;
+                document.getElementById('edit-type').value = type;
+                
+                let formFields = '';
+                if (type === 'fixed') {
+                    formFields = `
+                        <div class="mb-3">
+                            <label for="edit-name" class="form-label">Nome do Gasto</label>
+                            <input type="text" class="form-control" id="edit-name" value="${expense.name}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-value" class="form-label">Valor (R$)</label>
+                            <input type="number" class="form-control" id="edit-value" step="0.01" value="${expense.value}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-due-day" class="form-label">Dia de Vencimento</label>
+                            <input type="number" class="form-control" id="edit-due-day" min="1" max="31" value="${expense.dueDay}" required>
+                        </div>
+                    `;
+                } else {
+                    formFields = `
+                        <div class="mb-3">
+                            <label for="edit-date" class="form-label">Data da Compra</label>
+                            <input type="date" class="form-control" id="edit-date" value="${expense.date}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-name" class="form-label">Nome do Gasto</label>
+                            <input type="text" class="form-control" id="edit-name" value="${expense.name}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-value" class="form-label">Valor da Parcela (R$)</label>
+                            <input type="number" class="form-control" id="edit-value" step="0.01" value="${expense.value}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-installments" class="form-label">Parcelas</label>
+                            <input type="number" class="form-control" id="edit-installments" min="1" value="${expense.installments}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-closing-day" class="form-label">Dia do Fechamento</label>
+                            <input type="number" class="form-control" id="edit-closing-day" min="1" max="31" value="${expense.closingDay}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-observation" class="form-label">Observação</label>
+                            <input type="text" class="form-control" id="edit-observation" value="${expense.observation || ''}">
+                        </div>
+                    `;
+                }
+                
+                document.getElementById('edit-form-fields').innerHTML = formFields;
+                modal.show();
+            });
+    }
+
+    // Handle delete expense
+    function handleDelete(e) {
+        const id = e.target.closest('button').dataset.id;
+        const type = e.target.closest('button').dataset.type;
+        
+        if (confirm('Tem certeza que deseja excluir este gasto?')) {
+            database.ref(`users/${currentUser.uid}/${type}Expenses/${id}`).remove()
+                .then(() => {
+                    // Reload the appropriate list
+                    if (type === 'fixed') loadFixedExpenses();
+                    else if (type === 'sicredi') loadSicrediExpenses();
+                    else if (type === 'porto') loadPortoExpenses();
+                    else if (type === 'mp') loadMPExpenses();
+                    
+                    updateBillsSummary();
+                })
+                .catch((error) => {
+                    console.error('Erro ao excluir gasto:', error);
+                });
+        }
+    }
+
+    // Save edit
+    document.getElementById('save-edit-btn').addEventListener('click', () => {
+        const id = document.getElementById('edit-id').value;
+        const type = document.getElementById('edit-type').value;
+        
+        let updatedData = {};
+        if (type === 'fixed') {
+            updatedData = {
+                name: document.getElementById('edit-name').value,
+                value: parseFloat(document.getElementById('edit-value').value),
+                dueDay: parseInt(document.getElementById('edit-due-day').value),
+                updatedAt: new Date().toISOString()
+            };
+        } else {
+            updatedData = {
+                date: document.getElementById('edit-date').value,
+                name: document.getElementById('edit-name').value,
+                value: parseFloat(document.getElementById('edit-value').value),
+                installments: parseInt(document.getElementById('edit-installments').value),
+                closingDay: parseInt(document.getElementById('edit-closing-day').value),
+                observation: document.getElementById('edit-observation').value,
+                updatedAt: new Date().toISOString()
+            };
+        }
+        
+        database.ref(`users/${currentUser.uid}/${type}Expenses/${id}`).update(updatedData)
+            .then(() => {
+                bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+                
+                // Reload the appropriate list
+                if (type === 'fixed') loadFixedExpenses();
+                else if (type === 'sicredi') loadSicrediExpenses();
+                else if (type === 'porto') loadPortoExpenses();
+                else if (type === 'mp') loadMPExpenses();
+                
+                updateBillsSummary();
+            })
+            .catch((error) => {
+                console.error('Erro ao atualizar gasto:', error);
+            });
+    });
+    // Fixed Expenses
+    document.getElementById('fixed-expense-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = document.getElementById('fixed-name').value;
+        const value = parseFloat(document.getElementById('fixed-value').value);
+        const dueDay = parseInt(document.getElementById('fixed-due-day').value);
+        
+        const expense = {
+            name,
+            value,
+            dueDay,
+            createdAt: new Date().toISOString()
+        };
+        
+        const newExpenseRef = database.ref(`users/${currentUser.uid}/fixedExpenses`).push();
+        newExpenseRef.set(expense)
+            .then(() => {
+                document.getElementById('fixed-expense-form').reset();
+                loadFixedExpenses();
+                updateBillsSummary();
+            })
+            .catch((error) => {
+                console.error('Erro ao salvar gasto fixo:', error);
+            });
+    });
+
+    function loadFixedExpenses() {
+        database.ref(`users/${currentUser.uid}/fixedExpenses`).on('value', (snapshot) => {
+            const expensesList = document.getElementById('fixed-expenses-list');
+            expensesList.innerHTML = '';
+            
+            snapshot.forEach((childSnapshot) => {
+                const expense = childSnapshot.val();
+                const key = childSnapshot.key;
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${expense.name}</td>
+                    <td>${formatCurrency(expense.value)}</td>
+                    <td>${expense.dueDay}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${key}" data-type="fixed">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${key}" data-type="fixed">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                expensesList.appendChild(row);
+            });
+            
+            addEditDeleteListeners();
+        });
+    }
+
+    // Sicredi Expenses
+    document.getElementById('sicredi-expense-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const date = document.getElementById('sicredi-date').value;
+        const name = document.getElementById('sicredi-name').value;
+        const value = parseFloat(document.getElementById('sicredi-value').value);
+        const installments = parseInt(document.getElementById('sicredi-installments').value);
+        const closingDay = parseInt(document.getElementById('sicredi-closing-day').value);
+        const observation = document.getElementById('sicredi-observation').value;
+        
+        const expense = {
+            date,
+            name,
+            value,
+            installments,
+            closingDay,
+            observation,
+            cardType: 'sicredi',
+            createdAt: new Date().toISOString()
+        };
+        
+        const newExpenseRef = database.ref(`users/${currentUser.uid}/sicrediExpenses`).push();
+        newExpenseRef.set(expense)
+            .then(() => {
+                document.getElementById('sicredi-expense-form').reset();
+                loadSicrediExpenses();
+                updateBillsSummary();
+            })
+            .catch((error) => {
+                console.error('Erro ao salvar gasto Sicredi:', error);
+            });
+    });
+
+    function loadSicrediExpenses() {
+        database.ref(`users/${currentUser.uid}/sicrediExpenses`).on('value', (snapshot) => {
+            const expensesList = document.getElementById('sicredi-expenses-list');
+            expensesList.innerHTML = '';
+            
+            snapshot.forEach((childSnapshot) => {
+                const expense = childSnapshot.val();
+                const key = childSnapshot.key;
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${new Date(expense.date).toLocaleDateString()}</td>
+                    <td>${expense.name}</td>
+                    <td>${formatCurrency(expense.value)}</td>
+                    <td>${expense.installments}</td>
+                    <td>${expense.observation || '-'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${key}" data-type="sicredi">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${key}" data-type="sicredi">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                expensesList.appendChild(row);
+            });
+            
+            addEditDeleteListeners();
+        });
+    }
+
+    // Porto Expenses
+    document.getElementById('porto-expense-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const date = document.getElementById('porto-date').value;
+        const name = document.getElementById('porto-name').value;
+        const value = parseFloat(document.getElementById('porto-value').value);
+        const installments = parseInt(document.getElementById('porto-installments').value);
+        const closingDay = parseInt(document.getElementById('porto-closing-day').value);
+        const observation = document.getElementById('porto-observation').value;
+        
+        const expense = {
+            date,
+            name,
+            value,
+            installments,
+            closingDay,
+            observation,
+            cardType: 'porto',
+            createdAt: new Date().toISOString()
+        };
+        
+        const newExpenseRef = database.ref(`users/${currentUser.uid}/portoExpenses`).push();
+        newExpenseRef.set(expense)
+            .then(() => {
+                document.getElementById('porto-expense-form').reset();
+                loadPortoExpenses();
+                updateBillsSummary();
+            })
+            .catch((error) => {
+                console.error('Erro ao salvar gasto Porto:', error);
+            });
+    });
+
+    function loadPortoExpenses() {
+        database.ref(`users/${currentUser.uid}/portoExpenses`).on('value', (snapshot) => {
+            const expensesList = document.getElementById('porto-expenses-list');
+            expensesList.innerHTML = '';
+            
+            snapshot.forEach((childSnapshot) => {
+                const expense = childSnapshot.val();
+                const key = childSnapshot.key;
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${new Date(expense.date).toLocaleDateString()}</td>
+                    <td>${expense.name}</td>
+                    <td>${formatCurrency(expense.value)}</td>
+                    <td>${expense.installments}</td>
+                    <td>${expense.observation || '-'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${key}" data-type="porto">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${key}" data-type="porto">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                expensesList.appendChild(row);
+            });
+            
+            addEditDeleteListeners();
+        });
+    }
+
+    // Mercado Pago Expenses
+    document.getElementById('mp-expense-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const date = document.getElementById('mp-date').value;
+        const name = document.getElementById('mp-name').value;
+        const value = parseFloat(document.getElementById('mp-value').value);
+        const installments = parseInt(document.getElementById('mp-installments').value);
+        const closingDay = parseInt(document.getElementById('mp-closing-day').value);
+        const observation = document.getElementById('mp-observation').value;
+        
+        const expense = {
+            date,
+            name,
+            value,
+            installments,
+            closingDay,
+            observation,
+            cardType: 'mp',
+            createdAt: new Date().toISOString()
+        };
+        
+        const newExpenseRef = database.ref(`users/${currentUser.uid}/mpExpenses`).push();
+        newExpenseRef.set(expense)
+            .then(() => {
+                document.getElementById('mp-expense-form').reset();
+                loadMPExpenses();
+                updateBillsSummary();
+            })
+            .catch((error) => {
+                console.error('Erro ao salvar gasto Mercado Pago:', error);
+            });
+    });
+
+    function loadMPExpenses() {
+        database.ref(`users/${currentUser.uid}/mpExpenses`).on('value', (snapshot) => {
+            const expensesList = document.getElementById('mp-expenses-list');
+            expensesList.innerHTML = '';
+            
+            snapshot.forEach((childSnapshot) => {
+                const expense = childSnapshot.val();
+                const key = childSnapshot.key;
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${new Date(expense.date).toLocaleDateString()}</td>
+                    <td>${expense.name}</td>
+                    <td>${formatCurrency(expense.value)}</td>
+                    <td>${expense.installments}</td>
+                    <td>${expense.observation || '-'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${key}" data-type="mp">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${key}" data-type="mp">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                expensesList.appendChild(row);
+            });
+            
+            addEditDeleteListeners();
+        });
+    }
+    // Bills Summary Functions
+    function updateBillsSummary() {
+        const month = currentMonth;
+        const year = currentYear;
+        
+        // Reset summary data
+        summaryData = { fixed: 0, sicredi: 0, porto: 0, mp: 0, loans: 0 };
+        
+        // Load all data for the selected month/year
+        loadFixedExpensesForBills(month, year);
+        loadCreditCardExpensesForBills('sicredi', month, year);
+        loadCreditCardExpensesForBills('porto', month, year);
+        loadCreditCardExpensesForBills('mp', month, year);
+    }
+
+    function loadFixedExpensesForBills(month, year) {
+        database.ref(`users/${currentUser.uid}/fixedExpenses`).once('value')
+            .then((snapshot) => {
+                let totalFixed = 0;
+                let fixedHtml = '';
+                
+                snapshot.forEach((childSnapshot) => {
+                    const expense = childSnapshot.val();
+                    const key = childSnapshot.key;
+                    
+                    // Verificar se o gasto fixo está marcado como pago para este mês
+                    const paid = expense.paidMonths && expense.paidMonths[`${year}-${month}`];
+                    
+                    if (!paid) {
+                        totalFixed += expense.value;
+                    }
+                    
+                    fixedHtml += `
+                        <div class="expense-item d-flex justify-content-between align-items-center ${paid ? 'paid' : ''}">
+                            <div>
+                                <span>${expense.name}</span>
+                                <small class="text-muted d-block">Vencimento: dia ${expense.dueDay}</small>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <span class="me-2">${formatCurrency(expense.value)}</span>
+                                <button class="btn btn-sm ${paid ? 'btn-success' : 'btn-outline-success'}" 
+                                        onclick="toggleFixedPayment('${key}', ${month}, ${year})">
+                                    <i class="fas ${paid ? 'fa-check-circle' : 'fa-circle'}"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                document.getElementById('fixed-summary').innerHTML = fixedHtml || '<p class="text-muted">Nenhum gasto fixo</p>';
+                document.getElementById('fixed-summary-total').innerHTML = `<strong>Total: ${formatCurrency(totalFixed)}</strong>`;
+                
+                summaryData.fixed = totalFixed;
+                updateGeneralTotals();
+            });
+    }
+
+    function loadCreditCardExpensesForBills(cardType, month, year) {
+        database.ref(`users/${currentUser.uid}/${cardType}Expenses`).once('value')
+            .then((snapshot) => {
+                let totalCard = 0;
+                let cardHtml = '';
+                
+                snapshot.forEach((childSnapshot) => {
+                    const expense = childSnapshot.val();
+                    const key = childSnapshot.key;
+                    
+                    // Calcular parcelas para este mês/ano
+                    const installmentsThisMonth = calculateInstallmentsForMonth(expense, month, year, cardType);
+                    
+                    installmentsThisMonth.forEach((installment) => {
+                        const paid = expense.paidInstallments && expense.paidInstallments[`${year}-${month}-${installment.installment}`];
+                        
+                        if (!paid) {
+                            totalCard += installment.value;
+                        }
+                        
+                        cardHtml += `
+                            <div class="expense-item d-flex justify-content-between align-items-center ${paid ? 'paid' : ''}">
+                                <div>
+                                    <span>${expense.name} (${installment.installment}/${expense.installments})</span>
+                                    <small class="text-muted d-block">Vencimento: ${new Date(installment.date).toLocaleDateString()}</small>
+                                    ${expense.observation ? `<small class="text-muted d-block">Empréstimo: ${expense.observation}</small>` : ''}
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <span class="me-2">${formatCurrency(installment.value)}</span>
+                                    <button class="btn btn-sm ${paid ? 'btn-success' : 'btn-outline-success'}" 
+                                            onclick="toggleCardPayment('${cardType}', '${key}', ${installment.installment}, ${month}, ${year})">
+                                        <i class="fas ${paid ? 'fa-check-circle' : 'fa-circle'}"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                });
+                
+                document.getElementById(`${cardType}-summary`).innerHTML = cardHtml || '<p class="text-muted">Nenhum gasto</p>';
+                document.getElementById(`${cardType}-summary-total`).innerHTML = `<strong>Total: ${formatCurrency(totalCard)}</strong>`;
+                
+                summaryData[cardType] = totalCard;
+                updateGeneralTotals();
+                updateLoansSummary(month, year);
+            });
+    }
+
+    function calculateInstallmentsForMonth(expense, targetMonth, targetYear, cardType) {
+        const installments = [];
+        const dueDates = calculateDueDates(expense.date, expense.closingDay, cardType, expense.installments);
+        
+        dueDates.forEach(dueDate => {
+            if (dueDate.month === targetMonth && dueDate.year === targetYear) {
+                installments.push({
+                    installment: dueDate.installment,
+                    value: expense.value,
+                    date: dueDate.date
+                });
+            }
+        });
+        
+        return installments;
+    }
+
+    function updateGeneralTotals() {
+        const totalExpenses = summaryData.fixed + summaryData.sicredi + summaryData.porto + summaryData.mp;
+        const totalLoans = summaryData.loans;
+        const realExpenses = totalExpenses - totalLoans;
+        
+        document.getElementById('total-expenses').textContent = formatCurrency(totalExpenses);
+        document.getElementById('total-loans').textContent = formatCurrency(totalLoans);
+        document.getElementById('real-expenses').textContent = formatCurrency(realExpenses);
+        
+        // Update status
+        const statusElement = document.getElementById('payment-status');
+        if (totalExpenses === 0) {
+            statusElement.textContent = 'Sem gastos';
+            statusElement.className = 'badge bg-secondary';
+        } else if (realExpenses === 0) {
+            statusElement.textContent = 'Todos pagos';
+            statusElement.className = 'badge bg-success';
+        } else {
+            statusElement.textContent = 'Pendentes';
+            statusElement.className = 'badge bg-warning';
+        }
+    }
+
+    function updateLoansSummary(month, year) {
+        const loans = {};
+        
+        // Process all card types for loans
+        ['sicredi', 'porto', 'mp'].forEach(cardType => {
+            database.ref(`users/${currentUser.uid}/${cardType}Expenses`).once('value')
+                .then((snapshot) => {
+                    snapshot.forEach((childSnapshot) => {
+                        const expense = childSnapshot.val();
+                        
+                        if (expense.observation) {
+                            const installmentsThisMonth = calculateInstallmentsForMonth(expense, month, year, cardType);
+                            
+                            installmentsThisMonth.forEach(installment => {
+                                const paid = expense.paidInstallments && expense.paidInstallments[`${year}-${month}-${installment.installment}`];
+                                
+                                if (!paid) {
+                                    if (!loans[expense.observation]) {
+                                        loans[expense.observation] = 0;
+                                    }
+                                    loans[expense.observation] += installment.value;
+                                }
+                            });
+                        }
+                    });
+                    
+                    // Calculate total loans
+                    let totalLoans = 0;
+                    let loansHtml = '';
+                    
+                    for (const [person, amount] of Object.entries(loans)) {
+                        if (amount > 0) {
+                            totalLoans += amount;
+                            loansHtml += `
+                                <div class="loan-item d-flex justify-content-between align-items-center">
+                                    <span>${person}</span>
+                                    <span class="fw-bold">${formatCurrency(amount)}</span>
+                                </div>
+                            `;
+                        }
+                    }
+                    
+                    document.getElementById('loans-summary').innerHTML = loansHtml || '<p class="text-muted">Nenhum empréstimo</p>';
+                    summaryData.loans = totalLoans;
+                    updateGeneralTotals();
+                });
+        });
+    }
+
+    // Payment toggle functions
+    function toggleFixedPayment(expenseKey, month, year) {
+        const paidRef = database.ref(`users/${currentUser.uid}/fixedExpenses/${expenseKey}/paidMonths/${year}-${month}`);
+        
+        paidRef.once('value').then(snapshot => {
+            const isPaid = snapshot.val();
+            paidRef.set(!isPaid).then(() => {
+                updateBillsSummary();
+            });
+        });
+    }
+
+    function toggleCardPayment(cardType, expenseKey, installmentNumber, month, year) {
+        const paidRef = database.ref(`users/${currentUser.uid}/${cardType}Expenses/${expenseKey}/paidInstallments/${year}-${month}-${installmentNumber}`);
+        
+        paidRef.once('value').then(snapshot => {
+            const isPaid = snapshot.val();
+            paidRef.set(!isPaid).then(() => {
+                updateBillsSummary();
+            });
+        });
+    }
+
+    // Initialize the app when the page loads
+    document.addEventListener('DOMContentLoaded', () => {
+        // Set today's date as default for date inputs
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('sicredi-date').value = today;
+        document.getElementById('porto-date').value = today;
+        document.getElementById('mp-date').value = today;
+    });
+</script>
+</body>
+</html>
