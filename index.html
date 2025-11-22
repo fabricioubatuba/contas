@@ -745,7 +745,14 @@
             loadApp();
         }
     });
+    
     // Date utility functions
+function fixLocalDate(dateStr) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day); // <-- Aqui sim é sempre data local
+}
+
+    
     function initializeDateSelectors() {
         const monthSelector = document.getElementById('month-selector');
         const yearSelector = document.getElementById('year-selector');
@@ -794,7 +801,7 @@
     // Calculate due dates for credit card expenses
     function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
         const dueDates = [];
-        const purchase = new Date(purchaseDate);
+        const purchase = fixLocalDate(purchaseDate);
         const purchaseDay = purchase.getDate();
         
         // Determine the due day based on card type
@@ -818,7 +825,7 @@
         
         // Add all installment due dates
         for (let i = 0; i < installments; i++) {
-            const dueDate = new Date(firstDueDate);
+            const dueDate = new Date(firstDueDate.getFullYear(), firstDueDate.getMonth(), firstDueDate.getDate());
             dueDate.setMonth(firstDueDate.getMonth() + i);
             dueDates.push({
                 date: dueDate.toISOString().split('T')[0],
@@ -1077,7 +1084,7 @@
                 
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td>${new Date(expense.date).toLocaleDateString()}</td>
+                    <td>${fixLocalDate(expense.date).toLocaleDateString()}</td>
                     <td>${expense.name}</td>
                     <td>${formatCurrency(expense.value)}</td>
                     <td>${expense.installments}</td>
@@ -1142,7 +1149,7 @@
                 
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td>${new Date(expense.date).toLocaleDateString()}</td>
+                    <td>${fixLocalDate(expense.date).toLocaleDateString()}</td>
                     <td>${expense.name}</td>
                     <td>${formatCurrency(expense.value)}</td>
                     <td>${expense.installments}</td>
@@ -1207,7 +1214,7 @@
                 
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td>${new Date(expense.date).toLocaleDateString()}</td>
+                    <td>${fixLocalDate(expense.date).toLocaleDateString()}</td>
                     <td>${expense.name}</td>
                     <td>${formatCurrency(expense.value)}</td>
                     <td>${expense.installments}</td>
