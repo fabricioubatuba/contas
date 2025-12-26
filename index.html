@@ -115,6 +115,15 @@
             font-weight: 700;
             color: var(--primary-color);
         }
+        
+        .installment-badge {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            margin-left: 5px;
+        }
     </style>
 </head>
 <body>
@@ -181,25 +190,37 @@
                         <div class="card-body">
                             <form id="fixed-expense-form">
                                 <div class="row">
-                                    <div class="col-md-4">
+                                    <div class="col-md-3">
                                         <div class="mb-3">
                                             <label for="fixed-name" class="form-label">Nome do Gasto</label>
                                             <input type="text" class="form-control" id="fixed-name" required>
                                         </div>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-2">
                                         <div class="mb-3">
                                             <label for="fixed-value" class="form-label">Valor (R$)</label>
                                             <input type="number" class="form-control" id="fixed-value" step="0.01" required>
                                         </div>
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-md-2">
                                         <div class="mb-3">
                                             <label for="fixed-due-day" class="form-label">Dia de Vencimento</label>
                                             <input type="number" class="form-control" id="fixed-due-day" min="1" max="31" required>
                                         </div>
                                     </div>
-                                    <div class="col-md-2 d-flex align-items-end">
+                                    <div class="col-md-2">
+                                        <div class="mb-3">
+                                            <label for="fixed-installments" class="form-label">Parcelas</label>
+                                            <input type="number" class="form-control" id="fixed-installments" min="1" value="1">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="mb-3">
+                                            <label for="fixed-current-installment" class="form-label">Parcela Atual</label>
+                                            <input type="number" class="form-control" id="fixed-current-installment" min="1" value="1">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-1 d-flex align-items-end">
                                         <button type="submit" class="btn btn-primary w-100">Adicionar</button>
                                     </div>
                                 </div>
@@ -218,7 +239,8 @@
                                         <tr>
                                             <th>Nome</th>
                                             <th>Valor (R$)</th>
-                                            <th>Dia de Vencimento</th>
+                                            <th>Vencimento</th>
+                                            <th>Parcelas</th>
                                             <th>Ações</th>
                                         </tr>
                                     </thead>
@@ -295,7 +317,7 @@
                                 <table class="table table-hover">
                                     <thead>
                                         <tr>
-                                            <th>Data</th>
+                                            <th>Data da Compra</th>
                                             <th>Nome</th>
                                             <th>Valor Parcela (R$)</th>
                                             <th>Parcelas</th>
@@ -376,7 +398,7 @@
                                 <table class="table table-hover">
                                     <thead>
                                         <tr>
-                                            <th>Data</th>
+                                            <th>Data da Compra</th>
                                             <th>Nome</th>
                                             <th>Valor Parcela (R$)</th>
                                             <th>Parcelas</th>
@@ -457,7 +479,7 @@
                                 <table class="table table-hover">
                                     <thead>
                                         <tr>
-                                            <th>Data</th>
+                                            <th>Data da Compra</th>
                                             <th>Nome</th>
                                             <th>Valor Parcela (R$)</th>
                                             <th>Parcelas</th>
@@ -574,16 +596,6 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="card mt-4">
-                                <div class="card-header">
-                                    <h5 class="mb-0">Detalhamento de Gastos</h5>
-                                </div>
-                                <div class="card-body">
-                                    <div id="expenses-details">
-                                        <!-- Expenses details will be loaded here -->
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -617,9 +629,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // O código JavaScript será enviado na próxima parte
-    </script>
 </body>
 </html>
 <script>
@@ -747,12 +756,11 @@
     });
     
     // Date utility functions
-function fixLocalDate(dateStr) {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day); // <-- Aqui sim é sempre data local
-}
+    function fixLocalDate(dateStr) {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        return new Date(year, month - 1, day);
+    }
 
-    
     function initializeDateSelectors() {
         const monthSelector = document.getElementById('month-selector');
         const yearSelector = document.getElementById('year-selector');
@@ -886,6 +894,14 @@ function fixLocalDate(dateStr) {
                             <label for="edit-due-day" class="form-label">Dia de Vencimento</label>
                             <input type="number" class="form-control" id="edit-due-day" min="1" max="31" value="${expense.dueDay}" required>
                         </div>
+                        <div class="mb-3">
+                            <label for="edit-installments" class="form-label">Total de Parcelas</label>
+                            <input type="number" class="form-control" id="edit-installments" min="1" value="${expense.installments || 1}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-current-installment" class="form-label">Parcela Atual</label>
+                            <input type="number" class="form-control" id="edit-current-installment" min="1" value="${expense.currentInstallment || 1}" required>
+                        </div>
                     `;
                 } else {
                     formFields = `
@@ -954,6 +970,8 @@ function fixLocalDate(dateStr) {
                 name: document.getElementById('edit-name').value,
                 value: parseFloat(document.getElementById('edit-value').value),
                 dueDay: parseInt(document.getElementById('edit-due-day').value),
+                installments: parseInt(document.getElementById('edit-installments').value),
+                currentInstallment: parseInt(document.getElementById('edit-current-installment').value),
                 updatedAt: new Date().toISOString()
             };
         } else {
@@ -984,17 +1002,23 @@ function fixLocalDate(dateStr) {
                 console.error('Erro ao atualizar gasto:', error);
             });
     });
+
     // Fixed Expenses
     document.getElementById('fixed-expense-form').addEventListener('submit', (e) => {
         e.preventDefault();
         const name = document.getElementById('fixed-name').value;
         const value = parseFloat(document.getElementById('fixed-value').value);
         const dueDay = parseInt(document.getElementById('fixed-due-day').value);
+        const installments = parseInt(document.getElementById('fixed-installments').value) || 1;
+        const currentInstallment = parseInt(document.getElementById('fixed-current-installment').value) || 1;
         
         const expense = {
             name,
             value,
             dueDay,
+            installments,
+            currentInstallment,
+            isInstallment: installments > 1,
             createdAt: new Date().toISOString()
         };
         
@@ -1015,20 +1039,33 @@ function fixLocalDate(dateStr) {
             const expensesList = document.getElementById('fixed-expenses-list');
             expensesList.innerHTML = '';
             
+            const expenses = [];
             snapshot.forEach((childSnapshot) => {
                 const expense = childSnapshot.val();
-                const key = childSnapshot.key;
-                
+                expense.key = childSnapshot.key;
+                expenses.push(expense);
+            });
+            
+            // Sort by creation date (most recent first)
+            expenses.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            
+            expenses.forEach((expense) => {
                 const row = document.createElement('tr');
+                let installmentsText = '';
+                if (expense.installments && expense.installments > 1) {
+                    installmentsText = `${expense.currentInstallment || 1}/${expense.installments}`;
+                }
+                
                 row.innerHTML = `
                     <td>${expense.name}</td>
                     <td>${formatCurrency(expense.value)}</td>
-                    <td>${expense.dueDay}</td>
+                    <td>Dia ${expense.dueDay}</td>
+                    <td>${installmentsText || '-'}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${key}" data-type="fixed">
+                        <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${expense.key}" data-type="fixed">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${key}" data-type="fixed">
+                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${expense.key}" data-type="fixed">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -1078,10 +1115,17 @@ function fixLocalDate(dateStr) {
             const expensesList = document.getElementById('sicredi-expenses-list');
             expensesList.innerHTML = '';
             
+            const expenses = [];
             snapshot.forEach((childSnapshot) => {
                 const expense = childSnapshot.val();
-                const key = childSnapshot.key;
-                
+                expense.key = childSnapshot.key;
+                expenses.push(expense);
+            });
+            
+            // Sort by date (most recent first)
+            expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            expenses.forEach((expense) => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${fixLocalDate(expense.date).toLocaleDateString()}</td>
@@ -1090,10 +1134,10 @@ function fixLocalDate(dateStr) {
                     <td>${expense.installments}</td>
                     <td>${expense.observation || '-'}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${key}" data-type="sicredi">
+                        <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${expense.key}" data-type="sicredi">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${key}" data-type="sicredi">
+                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${expense.key}" data-type="sicredi">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -1143,10 +1187,17 @@ function fixLocalDate(dateStr) {
             const expensesList = document.getElementById('porto-expenses-list');
             expensesList.innerHTML = '';
             
+            const expenses = [];
             snapshot.forEach((childSnapshot) => {
                 const expense = childSnapshot.val();
-                const key = childSnapshot.key;
-                
+                expense.key = childSnapshot.key;
+                expenses.push(expense);
+            });
+            
+            // Sort by date (most recent first)
+            expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            expenses.forEach((expense) => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${fixLocalDate(expense.date).toLocaleDateString()}</td>
@@ -1155,10 +1206,10 @@ function fixLocalDate(dateStr) {
                     <td>${expense.installments}</td>
                     <td>${expense.observation || '-'}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${key}" data-type="porto">
+                        <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${expense.key}" data-type="porto">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${key}" data-type="porto">
+                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${expense.key}" data-type="porto">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -1208,10 +1259,17 @@ function fixLocalDate(dateStr) {
             const expensesList = document.getElementById('mp-expenses-list');
             expensesList.innerHTML = '';
             
+            const expenses = [];
             snapshot.forEach((childSnapshot) => {
                 const expense = childSnapshot.val();
-                const key = childSnapshot.key;
-                
+                expense.key = childSnapshot.key;
+                expenses.push(expense);
+            });
+            
+            // Sort by date (most recent first)
+            expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            expenses.forEach((expense) => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>${fixLocalDate(expense.date).toLocaleDateString()}</td>
@@ -1220,10 +1278,10 @@ function fixLocalDate(dateStr) {
                     <td>${expense.installments}</td>
                     <td>${expense.observation || '-'}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${key}" data-type="mp">
+                        <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${expense.key}" data-type="mp">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${key}" data-type="mp">
+                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${expense.key}" data-type="mp">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -1234,6 +1292,7 @@ function fixLocalDate(dateStr) {
             addEditDeleteListeners();
         });
     }
+
     // Bills Summary Functions
     function updateBillsSummary() {
         const month = currentMonth;
@@ -1262,25 +1321,40 @@ function fixLocalDate(dateStr) {
                     // Verificar se o gasto fixo está marcado como pago para este mês
                     const paid = expense.paidMonths && expense.paidMonths[`${year}-${month}`];
                     
-                    if (!paid) {
+                    // Check if this fixed expense should be displayed this month
+                    let shouldDisplay = true;
+                    let installmentText = '';
+                    
+                    if (expense.installments && expense.installments > 1) {
+                        // For installment expenses, check if current installment matches selected month
+                        // This is a simplified logic - you might want to implement more sophisticated logic
+                        // based on start date or other criteria
+                        if (expense.currentInstallment) {
+                            installmentText = ` <span class="installment-badge">${expense.currentInstallment}/${expense.installments}</span>`;
+                        }
+                    }
+                    
+                    if (shouldDisplay && !paid) {
                         totalFixed += expense.value;
                     }
                     
-                    fixedHtml += `
-                        <div class="expense-item d-flex justify-content-between align-items-center ${paid ? 'paid' : ''}">
-                            <div>
-                                <span>${expense.name}</span>
-                                <small class="text-muted d-block">Vencimento: dia ${expense.dueDay}</small>
+                    if (shouldDisplay) {
+                        fixedHtml += `
+                            <div class="expense-item d-flex justify-content-between align-items-center ${paid ? 'paid' : ''}">
+                                <div>
+                                    <span>${expense.name}${installmentText}</span>
+                                    <small class="text-muted d-block">Vencimento: dia ${expense.dueDay}</small>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <span class="me-2">${formatCurrency(expense.value)}</span>
+                                    <button class="btn btn-sm ${paid ? 'btn-success' : 'btn-outline-success'}" 
+                                            onclick="toggleFixedPayment('${key}', ${month}, ${year})">
+                                        <i class="fas ${paid ? 'fa-check-circle' : 'fa-circle'}"></i>
+                                    </button>
+                                </div>
                             </div>
-                            <div class="d-flex align-items-center">
-                                <span class="me-2">${formatCurrency(expense.value)}</span>
-                                <button class="btn btn-sm ${paid ? 'btn-success' : 'btn-outline-success'}" 
-                                        onclick="toggleFixedPayment('${key}', ${month}, ${year})">
-                                    <i class="fas ${paid ? 'fa-check-circle' : 'fa-circle'}"></i>
-                                </button>
-                            </div>
-                        </div>
-                    `;
+                        `;
+                    }
                 });
                 
                 document.getElementById('fixed-summary').innerHTML = fixedHtml || '<p class="text-muted">Nenhum gasto fixo</p>';
@@ -1311,11 +1385,14 @@ function fixLocalDate(dateStr) {
                             totalCard += installment.value;
                         }
                         
+                        // Show purchase date instead of due date
+                        const purchaseDate = fixLocalDate(expense.date).toLocaleDateString();
+                        
                         cardHtml += `
                             <div class="expense-item d-flex justify-content-between align-items-center ${paid ? 'paid' : ''}">
                                 <div>
                                     <span>${expense.name} (${installment.installment}/${expense.installments})</span>
-                                    <small class="text-muted d-block">Vencimento: ${new Date(installment.date).toLocaleDateString()}</small>
+                                    <small class="text-muted d-block">Compra: ${purchaseDate}</small>
                                     ${expense.observation ? `<small class="text-muted d-block">Empréstimo: ${expense.observation}</small>` : ''}
                                 </div>
                                 <div class="d-flex align-items-center">
@@ -1383,8 +1460,8 @@ function fixLocalDate(dateStr) {
         const loans = {};
         
         // Process all card types for loans
-        ['sicredi', 'porto', 'mp'].forEach(cardType => {
-            database.ref(`users/${currentUser.uid}/${cardType}Expenses`).once('value')
+        const promises = ['sicredi', 'porto', 'mp'].map(cardType => {
+            return database.ref(`users/${currentUser.uid}/${cardType}Expenses`).once('value')
                 .then((snapshot) => {
                     snapshot.forEach((childSnapshot) => {
                         const expense = childSnapshot.val();
@@ -1404,27 +1481,29 @@ function fixLocalDate(dateStr) {
                             });
                         }
                     });
-                    
-                    // Calculate total loans
-                    let totalLoans = 0;
-                    let loansHtml = '';
-                    
-                    for (const [person, amount] of Object.entries(loans)) {
-                        if (amount > 0) {
-                            totalLoans += amount;
-                            loansHtml += `
-                                <div class="loan-item d-flex justify-content-between align-items-center">
-                                    <span>${person}</span>
-                                    <span class="fw-bold">${formatCurrency(amount)}</span>
-                                </div>
-                            `;
-                        }
-                    }
-                    
-                    document.getElementById('loans-summary').innerHTML = loansHtml || '<p class="text-muted">Nenhum empréstimo</p>';
-                    summaryData.loans = totalLoans;
-                    updateGeneralTotals();
                 });
+        });
+        
+        Promise.all(promises).then(() => {
+            // Calculate total loans
+            let totalLoans = 0;
+            let loansHtml = '';
+            
+            for (const [person, amount] of Object.entries(loans)) {
+                if (amount > 0) {
+                    totalLoans += amount;
+                    loansHtml += `
+                        <div class="loan-item d-flex justify-content-between align-items-center">
+                            <span>${person}</span>
+                            <span class="fw-bold">${formatCurrency(amount)}</span>
+                        </div>
+                    `;
+                }
+            }
+            
+            document.getElementById('loans-summary').innerHTML = loansHtml || '<p class="text-muted">Nenhum empréstimo</p>';
+            summaryData.loans = totalLoans;
+            updateGeneralTotals();
         });
     }
 
@@ -1460,5 +1539,3 @@ function fixLocalDate(dateStr) {
         document.getElementById('mp-date').value = today;
     });
 </script>
-</body>
-</html>
