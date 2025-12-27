@@ -806,45 +806,48 @@
         });
     }
 
-    // Calculate due dates for credit card expenses
-    function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
-        const dueDates = [];
-        const purchase = fixLocalDate(purchaseDate);
-        const purchaseDay = purchase.getDate();
-        
-        // Determine the due day based on card type
-        let dueDay;
-        switch(cardType) {
-            case 'sicredi': dueDay = 20; break;
-            case 'porto': dueDay = 15; break;
-            case 'mp': dueDay = 10; break;
-            default: dueDay = 1;
-        }
-        
-        // Determine the first due date
-        let firstDueDate = new Date(purchase);
-        
-        if (purchaseDay > closingDay) {
-            // If purchase is after closing day, first due is next month
-            firstDueDate.setMonth(firstDueDate.getMonth() + 1);
-        }
-        
-        firstDueDate.setDate(dueDay);
-        
-        // Add all installment due dates
-        for (let i = 0; i < installments; i++) {
-            const dueDate = new Date(firstDueDate.getFullYear(), firstDueDate.getMonth(), firstDueDate.getDate());
-            dueDate.setMonth(firstDueDate.getMonth() + i);
-            dueDates.push({
-                date: dueDate.toISOString().split('T')[0],
-                month: dueDate.getMonth() + 1,
-                year: dueDate.getFullYear(),
-                installment: i + 1
-            });
-        }
-        
-        return dueDates;
+function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
+    const dueDates = [];
+    const purchase = fixLocalDate(purchaseDate);
+    const purchaseDay = purchase.getDate();
+    
+    // Determinar o dia de vencimento baseado no tipo de cartão
+    let dueDay;
+    switch(cardType) {
+        case 'sicredi': dueDay = 20; break;
+        case 'porto': dueDay = 15; break;
+        case 'mp': dueDay = 10; break;
+        default: dueDay = 1;
     }
+    
+    // Determinar o primeiro vencimento
+    let firstDueDate = new Date(purchase);
+    firstDueDate.setDate(dueDay); // Primeiro definimos o dia correto
+    
+    // Aplicar a regra de vencimento
+    if (purchaseDay > closingDay) {
+        // Se a compra for APÓS o fechamento, a primeira parcela é no PRÓXIMO mês
+        firstDueDate.setMonth(firstDueDate.getMonth() + 1);
+    } else {
+        // Se a compra for NO fechamento ou ANTES, a primeira parcela é NO MESMO mês
+        // Já está correta (mantém o mês da compra)
+    }
+    
+    // Adicionar todas as parcelas
+    for (let i = 0; i < installments; i++) {
+        const dueDate = new Date(firstDueDate);
+        dueDate.setMonth(firstDueDate.getMonth() + i);
+        
+        dueDates.push({
+            date: dueDate.toISOString().split('T')[0],
+            month: dueDate.getMonth() + 1,
+            year: dueDate.getFullYear(),
+            installment: i + 1
+        });
+    }
+    
+    return dueDates;
+}
 
     // Format currency
     function formatCurrency(value) {
@@ -1416,22 +1419,26 @@
             });
     }
 
-    function calculateInstallmentsForMonth(expense, targetMonth, targetYear, cardType) {
-        const installments = [];
-        const dueDates = calculateDueDates(expense.date, expense.closingDay, cardType, expense.installments);
-        
-        dueDates.forEach(dueDate => {
-            if (dueDate.month === targetMonth && dueDate.year === targetYear) {
-                installments.push({
-                    installment: dueDate.installment,
-                    value: expense.value,
-                    date: dueDate.date
-                });
-            }
-        });
-        
-        return installments;
-    }
+function calculateInstallmentsForMonth(expense, targetMonth, targetYear, cardType) {
+    const installments = [];
+    const dueDates = calculateDueDates(expense.date, expense.closingDay, cardType, expense.installments);
+    
+    // Garantir que são números
+    const month = parseInt(targetMonth);
+    const year = parseInt(targetYear);
+    
+    dueDates.forEach(dueDate => {
+        if (dueDate.month === month && dueDate.year === year) {
+            installments.push({
+                installment: dueDate.installment,
+                value: expense.value,
+                date: dueDate.date
+            });
+        }
+    });
+    
+    return installments;
+}
 
     function updateGeneralTotals() {
         const totalExpenses = summaryData.fixed + summaryData.sicredi + summaryData.porto + summaryData.mp;
