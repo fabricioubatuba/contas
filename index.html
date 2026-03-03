@@ -6,9 +6,11 @@
     <title>Controle de Gastos Pessoais</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" type="image/x-icon">
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
             --primary-color: #4361ee;
@@ -123,6 +125,22 @@
             border-radius: 12px;
             font-size: 0.75rem;
             margin-left: 5px;
+        }
+        
+        .currency-input {
+            text-align: right;
+        }
+        
+        .upload-section {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        
+        .progress-info {
+            font-size: 0.9rem;
+            margin-top: 10px;
         }
     </style>
 </head>
@@ -277,7 +295,8 @@
                                     <div class="col-md-2">
                                         <div class="mb-3">
                                             <label for="sicredi-value" class="form-label">Valor da Parcela (R$)</label>
-                                            <input type="number" class="form-control" id="sicredi-value" step="0.01" required>
+                                            <input type="text" class="form-control currency-input" id="sicredi-value" placeholder="0,00" required>
+                                            <small class="form-text text-muted">Digite apenas números (ex: 12356 = 123,56)</small>
                                         </div>
                                     </div>
                                     <div class="col-md-2">
@@ -305,6 +324,23 @@
                                     </div>
                                 </div>
                             </form>
+                            
+                            <!-- Upload Section for Sicredi -->
+                            <div class="upload-section">
+                                <h6 class="mb-3"><i class="fas fa-upload me-2"></i>Upload de Arquivo XLS</h6>
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <input type="file" class="form-control" id="sicredi-upload" accept=".xls,.xlsx">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <button type="button" class="btn btn-success w-100" id="sicredi-upload-btn">
+                                            <i class="fas fa-upload me-2"></i>Processar XLS
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="sicredi-upload-progress" class="progress-info"></div>
+                                <div id="sicredi-upload-result" class="progress-info"></div>
+                            </div>
                         </div>
                     </div>
 
@@ -358,7 +394,8 @@
                                     <div class="col-md-2">
                                         <div class="mb-3">
                                             <label for="porto-value" class="form-label">Valor da Parcela (R$)</label>
-                                            <input type="number" class="form-control" id="porto-value" step="0.01" required>
+                                            <input type="text" class="form-control currency-input" id="porto-value" placeholder="0,00" required>
+                                            <small class="form-text text-muted">Digite apenas números (ex: 12356 = 123,56)</small>
                                         </div>
                                     </div>
                                     <div class="col-md-2">
@@ -386,6 +423,23 @@
                                     </div>
                                 </div>
                             </form>
+                            
+                            <!-- Upload Section for Porto -->
+                            <div class="upload-section">
+                                <h6 class="mb-3"><i class="fas fa-upload me-2"></i>Upload de Arquivo XLS</h6>
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <input type="file" class="form-control" id="porto-upload" accept=".xls,.xlsx">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <button type="button" class="btn btn-success w-100" id="porto-upload-btn">
+                                            <i class="fas fa-upload me-2"></i>Processar XLS
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="porto-upload-progress" class="progress-info"></div>
+                                <div id="porto-upload-result" class="progress-info"></div>
+                            </div>
                         </div>
                     </div>
 
@@ -439,7 +493,8 @@
                                     <div class="col-md-2">
                                         <div class="mb-3">
                                             <label for="mp-value" class="form-label">Valor da Parcela (R$)</label>
-                                            <input type="number" class="form-control" id="mp-value" step="0.01" required>
+                                            <input type="text" class="form-control currency-input" id="mp-value" placeholder="0,00" required>
+                                            <small class="form-text text-muted">Digite apenas números (ex: 12356 = 123,56)</small>
                                         </div>
                                     </div>
                                     <div class="col-md-2">
@@ -806,48 +861,48 @@
         });
     }
 
-function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
-    const dueDates = [];
-    const purchase = fixLocalDate(purchaseDate);
-    const purchaseDay = purchase.getDate();
-    
-    // Determinar o dia de vencimento baseado no tipo de cartão
-    let dueDay;
-    switch(cardType) {
-        case 'sicredi': dueDay = 20; break;
-        case 'porto': dueDay = 15; break;
-        case 'mp': dueDay = 10; break;
-        default: dueDay = 1;
-    }
-    
-    // Determinar o primeiro vencimento
-    let firstDueDate = new Date(purchase);
-    firstDueDate.setDate(dueDay); // Primeiro definimos o dia correto
-    
-    // Aplicar a regra de vencimento
-    if (purchaseDay > closingDay) {
-        // Se a compra for APÓS o fechamento, a primeira parcela é no PRÓXIMO mês
-        firstDueDate.setMonth(firstDueDate.getMonth() + 1);
-    } else {
-        // Se a compra for NO fechamento ou ANTES, a primeira parcela é NO MESMO mês
-        // Já está correta (mantém o mês da compra)
-    }
-    
-    // Adicionar todas as parcelas
-    for (let i = 0; i < installments; i++) {
-        const dueDate = new Date(firstDueDate);
-        dueDate.setMonth(firstDueDate.getMonth() + i);
+    function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
+        const dueDates = [];
+        const purchase = fixLocalDate(purchaseDate);
+        const purchaseDay = purchase.getDate();
         
-        dueDates.push({
-            date: dueDate.toISOString().split('T')[0],
-            month: dueDate.getMonth() + 1,
-            year: dueDate.getFullYear(),
-            installment: i + 1
-        });
+        // Determinar o dia de vencimento baseado no tipo de cartão
+        let dueDay;
+        switch(cardType) {
+            case 'sicredi': dueDay = 20; break;
+            case 'porto': dueDay = 15; break;
+            case 'mp': dueDay = 10; break;
+            default: dueDay = 1;
+        }
+        
+        // Determinar o primeiro vencimento
+        let firstDueDate = new Date(purchase);
+        firstDueDate.setDate(dueDay); // Primeiro definimos o dia correto
+        
+        // Aplicar a regra de vencimento
+        if (purchaseDay > closingDay) {
+            // Se a compra for APÓS o fechamento, a primeira parcela é no PRÓXIMO mês
+            firstDueDate.setMonth(firstDueDate.getMonth() + 1);
+        } else {
+            // Se a compra for NO fechamento ou ANTES, a primeira parcela é NO MESMO mês
+            // Já está correta (mantém o mês da compra)
+        }
+        
+        // Adicionar todas as parcelas
+        for (let i = 0; i < installments; i++) {
+            const dueDate = new Date(firstDueDate);
+            dueDate.setMonth(firstDueDate.getMonth() + i);
+            
+            dueDates.push({
+                date: dueDate.toISOString().split('T')[0],
+                month: dueDate.getMonth() + 1,
+                year: dueDate.getFullYear(),
+                installment: i + 1
+            });
+        }
+        
+        return dueDates;
     }
-    
-    return dueDates;
-}
 
     // Format currency
     function formatCurrency(value) {
@@ -855,6 +910,62 @@ function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
             style: 'currency',
             currency: 'BRL'
         }).format(value);
+    }
+
+    // Format input to currency
+    function formatCurrencyInput(value) {
+        // Remove tudo que não for número
+        const numbers = value.replace(/\D/g, '');
+        
+        // Se estiver vazio, retorna 0,00
+        if (numbers === '') return '0,00';
+        
+        // Garante que tenha pelo menos 3 dígitos (para centavos)
+        const padded = numbers.padStart(3, '0');
+        
+        // Separa reais e centavos
+        const reais = padded.slice(0, -2);
+        const centavos = padded.slice(-2);
+        
+        // Formata com separador de milhar se necessário
+        const formattedReais = reais.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        
+        return formattedReais + ',' + centavos;
+    }
+
+    // Parse currency input to number
+    function parseCurrencyInput(value) {
+        // Remove pontos e substitui vírgula por ponto
+        const cleaned = value.replace(/\./g, '').replace(',', '.');
+        return parseFloat(cleaned);
+    }
+
+    // Setup currency input handlers
+    function setupCurrencyInputs() {
+        const currencyInputs = document.querySelectorAll('.currency-input');
+        
+        currencyInputs.forEach(input => {
+            // Formatar ao perder o foco
+            input.addEventListener('blur', function() {
+                this.value = formatCurrencyInput(this.value);
+            });
+            
+            // Formatar ao digitar
+            input.addEventListener('input', function(e) {
+                // Permite apenas números
+                this.value = this.value.replace(/\D/g, '');
+                
+                // Formata em tempo real se tiver mais de 2 dígitos
+                if (this.value.length >= 3) {
+                    this.value = formatCurrencyInput(this.value);
+                }
+            });
+            
+            // Formatar inicialmente se já tiver valor
+            if (input.value) {
+                input.value = formatCurrencyInput(input.value);
+            }
+        });
     }
 
     // Add event listeners for edit and delete buttons
@@ -918,7 +1029,7 @@ function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
                         </div>
                         <div class="mb-3">
                             <label for="edit-value" class="form-label">Valor da Parcela (R$)</label>
-                            <input type="number" class="form-control" id="edit-value" step="0.01" value="${expense.value}" required>
+                            <input type="text" class="form-control currency-input" id="edit-value" value="${expense.value.toFixed(2).replace('.', ',')}" required>
                         </div>
                         <div class="mb-3">
                             <label for="edit-installments" class="form-label">Parcelas</label>
@@ -937,6 +1048,7 @@ function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
                 
                 document.getElementById('edit-form-fields').innerHTML = formFields;
                 modal.show();
+                setupCurrencyInputs();
             });
     }
 
@@ -981,7 +1093,7 @@ function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
             updatedData = {
                 date: document.getElementById('edit-date').value,
                 name: document.getElementById('edit-name').value,
-                value: parseFloat(document.getElementById('edit-value').value),
+                value: parseCurrencyInput(document.getElementById('edit-value').value),
                 installments: parseInt(document.getElementById('edit-installments').value),
                 closingDay: parseInt(document.getElementById('edit-closing-day').value),
                 observation: document.getElementById('edit-observation').value,
@@ -1085,7 +1197,7 @@ function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
         e.preventDefault();
         const date = document.getElementById('sicredi-date').value;
         const name = document.getElementById('sicredi-name').value;
-        const value = parseFloat(document.getElementById('sicredi-value').value);
+        const value = parseCurrencyInput(document.getElementById('sicredi-value').value);
         const installments = parseInt(document.getElementById('sicredi-installments').value);
         const closingDay = parseInt(document.getElementById('sicredi-closing-day').value);
         const observation = document.getElementById('sicredi-observation').value;
@@ -1105,6 +1217,7 @@ function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
         newExpenseRef.set(expense)
             .then(() => {
                 document.getElementById('sicredi-expense-form').reset();
+                document.getElementById('sicredi-value').value = '';
                 loadSicrediExpenses();
                 updateBillsSummary();
             })
@@ -1157,7 +1270,7 @@ function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
         e.preventDefault();
         const date = document.getElementById('porto-date').value;
         const name = document.getElementById('porto-name').value;
-        const value = parseFloat(document.getElementById('porto-value').value);
+        const value = parseCurrencyInput(document.getElementById('porto-value').value);
         const installments = parseInt(document.getElementById('porto-installments').value);
         const closingDay = parseInt(document.getElementById('porto-closing-day').value);
         const observation = document.getElementById('porto-observation').value;
@@ -1177,6 +1290,7 @@ function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
         newExpenseRef.set(expense)
             .then(() => {
                 document.getElementById('porto-expense-form').reset();
+                document.getElementById('porto-value').value = '';
                 loadPortoExpenses();
                 updateBillsSummary();
             })
@@ -1229,7 +1343,7 @@ function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
         e.preventDefault();
         const date = document.getElementById('mp-date').value;
         const name = document.getElementById('mp-name').value;
-        const value = parseFloat(document.getElementById('mp-value').value);
+        const value = parseCurrencyInput(document.getElementById('mp-value').value);
         const installments = parseInt(document.getElementById('mp-installments').value);
         const closingDay = parseInt(document.getElementById('mp-closing-day').value);
         const observation = document.getElementById('mp-observation').value;
@@ -1249,6 +1363,7 @@ function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
         newExpenseRef.set(expense)
             .then(() => {
                 document.getElementById('mp-expense-form').reset();
+                document.getElementById('mp-value').value = '';
                 loadMPExpenses();
                 updateBillsSummary();
             })
@@ -1296,6 +1411,382 @@ function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
         });
     }
 
+    // ========== FUNÇÕES DE UPLOAD ==========
+
+    // Função para ler arquivo Excel
+    function readExcelFile(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+                    resolve(jsonData);
+                } catch (error) {
+                    reject(error);
+                }
+            };
+            
+            reader.onerror = function(error) {
+                reject(error);
+            };
+            
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    // Função para parsear Excel do Sicredi
+    function parseSicrediExcel(data) {
+        const expenses = [];
+        
+        // Encontrar a linha onde começa a coluna "data"
+        let startRow = 0;
+        for (let i = 0; i < data.length; i++) {
+            const row = data[i];
+            if (row && row.length > 0 && String(row[0]).toLowerCase().includes('data')) {
+                startRow = i + 1; // A próxima linha começa os dados
+                break;
+            }
+        }
+        
+        // Se não encontrar a linha com "data", começar da linha 23 como padrão
+        if (startRow === 0) {
+            startRow = 22; // Índice 22 corresponde à linha 23
+        }
+        
+        // Processar linhas a partir de startRow
+        for (let i = startRow; i < data.length; i++) {
+            const row = data[i];
+            if (!row || row.length < 4) continue;
+            
+            const dataCompra = row[0];
+            const descricao = row[1];
+            const parcelas = row[2];
+            const valor = row[3];
+            
+            // Pular linhas vazias
+            if (!dataCompra || !descricao || !valor) continue;
+            
+            // Verificar se o valor é negativo (desconsiderar)
+            const valorNumerico = parseFloat(String(valor).replace(',', '.'));
+            if (isNaN(valorNumerico) || valorNumerico < 0) continue;
+            
+            // Processar parcelas
+            let totalParcelas = 1;
+            if (parcelas && String(parcelas).includes('/')) {
+                const partes = String(parcelas).split('/');
+                totalParcelas = parseInt(partes[1]);
+            }
+            
+            // Converter data para formato YYYY-MM-DD se necessário
+            let dataFormatada = String(dataCompra).trim();
+            if (dataFormatada.includes('/')) {
+                const partes = dataFormatada.split('/');
+                if (partes.length === 3) {
+                    // Data no formato DD/MM/YYYY
+                    dataFormatada = `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
+                } else if (partes.length === 2) {
+                    // Data no formato DD/MM - precisa determinar o ano
+                    const dia = partes[0].padStart(2, '0');
+                    const mes = partes[1].padStart(2, '0');
+                    const anoAtual = new Date().getFullYear();
+                    dataFormatada = `${anoAtual}-${mes}-${dia}`;
+                }
+            }
+            
+            // Adicionar gasto
+            expenses.push({
+                date: dataFormatada,
+                name: descricao.trim(),
+                value: valorNumerico,
+                installments: totalParcelas,
+                closingDay: 10, // Valor padrão para Sicredi
+                observation: '',
+                cardType: 'sicredi'
+            });
+        }
+        
+        return expenses;
+    }
+
+    // Função para parsear Excel do Porto
+    function parsePortoExcel(data) {
+        const expenses = [];
+        const dataAtual = new Date();
+        const anoAtual = dataAtual.getFullYear();
+        const mesAtual = dataAtual.getMonth() + 1;
+        
+        // Processar a partir da segunda linha (índice 1)
+        for (let i = 1; i < data.length; i++) {
+            const row = data[i];
+            if (!row || row.length < 4) continue;
+            
+            const dataCompra = row[0];
+            const descricaoCompleta = row[1];
+            const valor = row[3]; // Coluna D (índice 3)
+            
+            // Pular linhas com valor vazio
+            if (!valor || String(valor).trim() === '') continue;
+            
+            // Processar valor
+            const valorNumerico = parseFloat(String(valor).replace(',', '.'));
+            if (isNaN(valorNumerico)) continue;
+            
+            // Extrair número de parcelas da descrição
+            let descricao = String(descricaoCompleta).trim();
+            let totalParcelas = 1;
+            
+            // Procurar padrão XX/XX na descrição (ex: 08/10)
+            const parcelasMatch = descricao.match(/(\d+)\/(\d+)/);
+            if (parcelasMatch) {
+                totalParcelas = parseInt(parcelasMatch[2]);
+                // Remover o padrão de parcelas da descrição para deixar apenas o nome da loja
+                descricao = descricao.replace(parcelasMatch[0], '').trim();
+            }
+            
+            // Limpar descrição (remover espaços extras)
+            descricao = descricao.replace(/\s+/g, ' ').trim();
+            
+            // Processar data da compra
+            let dataCompraStr = String(dataCompra).trim();
+            
+            // Converter data DD/MM para formato YYYY-MM-DD
+            if (dataCompraStr.includes('/')) {
+                const partes = dataCompraStr.split('/');
+                if (partes.length === 2) {
+                    const dia = parseInt(partes[0]);
+                    const mes = parseInt(partes[1]);
+                    
+                    // Determinar o ano apropriado
+                    let ano = anoAtual;
+                    
+                    // Se o mês da compra for maior que o mês atual, provavelmente é do ano anterior
+                    if (mes > mesAtual) {
+                        ano = anoAtual - 1;
+                    }
+                    // Se for menor ou igual, é do ano atual
+                    
+                    // Formatar data para YYYY-MM-DD
+                    dataCompraStr = `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+                }
+            }
+            
+            // Adicionar gasto
+            expenses.push({
+                date: dataCompraStr,
+                name: descricao,
+                value: valorNumerico,
+                installments: totalParcelas,
+                closingDay: 15, // Valor padrão para Porto
+                observation: '',
+                cardType: 'porto'
+            });
+        }
+        
+        return expenses;
+    }
+
+    // Função para verificar se gasto Sicredi já existe
+    async function addSicrediExpenseIfNotExists(expense) {
+        return new Promise((resolve) => {
+            database.ref(`users/${currentUser.uid}/sicrediExpenses`).once('value')
+                .then((snapshot) => {
+                    let exists = false;
+                    
+                    snapshot.forEach((childSnapshot) => {
+                        const existingExpense = childSnapshot.val();
+                        
+                        // Comparar data, nome e valor (com tolerância para diferenças de formatação)
+                        if (existingExpense.date === expense.date &&
+                            existingExpense.name.trim().toLowerCase() === expense.name.toLowerCase() &&
+                            Math.abs(existingExpense.value - expense.value) < 0.01) {
+                            exists = true;
+                            return true; // break the loop
+                        }
+                    });
+                    
+                    if (!exists) {
+                        // Adicionar novo gasto
+                        const newExpenseRef = database.ref(`users/${currentUser.uid}/sicrediExpenses`).push();
+                        newExpenseRef.set({
+                            ...expense,
+                            createdAt: new Date().toISOString()
+                        }).then(() => {
+                            resolve(true);
+                        }).catch((error) => {
+                            console.error('Erro ao salvar gasto Sicredi:', error);
+                            resolve(false);
+                        });
+                    } else {
+                        resolve(false);
+                    }
+                })
+                .catch((error) => {
+                    console.error('Erro ao verificar gasto existente:', error);
+                    resolve(false);
+                });
+        });
+    }
+
+    // Função para verificar se gasto Porto já existe
+    async function addPortoExpenseIfNotExists(expense) {
+        return new Promise((resolve) => {
+            database.ref(`users/${currentUser.uid}/portoExpenses`).once('value')
+                .then((snapshot) => {
+                    let exists = false;
+                    
+                    snapshot.forEach((childSnapshot) => {
+                        const existingExpense = childSnapshot.val();
+                        
+                        // Comparar data, nome e valor (com tolerância para diferenças de formatação)
+                        if (existingExpense.date === expense.date &&
+                            existingExpense.name.trim().toLowerCase() === expense.name.toLowerCase() &&
+                            Math.abs(existingExpense.value - expense.value) < 0.01) {
+                            exists = true;
+                            return true; // break the loop
+                        }
+                    });
+                    
+                    if (!exists) {
+                        // Adicionar novo gasto
+                        const newExpenseRef = database.ref(`users/${currentUser.uid}/portoExpenses`).push();
+                        newExpenseRef.set({
+                            ...expense,
+                            createdAt: new Date().toISOString()
+                        }).then(() => {
+                            resolve(true);
+                        }).catch((error) => {
+                            console.error('Erro ao salvar gasto Porto:', error);
+                            resolve(false);
+                        });
+                    } else {
+                        resolve(false);
+                    }
+                })
+                .catch((error) => {
+                    console.error('Erro ao verificar gasto existente:', error);
+                    resolve(false);
+                });
+        });
+    }
+
+    // Event listener para upload do Sicredi
+    document.getElementById('sicredi-upload-btn').addEventListener('click', async function() {
+        const fileInput = document.getElementById('sicredi-upload');
+        const progressDiv = document.getElementById('sicredi-upload-progress');
+        const resultDiv = document.getElementById('sicredi-upload-result');
+        
+        if (!fileInput.files.length) {
+            alert('Por favor, selecione um arquivo XLS');
+            return;
+        }
+        
+        const file = fileInput.files[0];
+        progressDiv.innerHTML = '<div class="alert alert-info">Processando arquivo...</div>';
+        resultDiv.innerHTML = '';
+        
+        try {
+            const data = await readExcelFile(file);
+            const expenses = parseSicrediExcel(data);
+            
+            progressDiv.innerHTML = `<div class="alert alert-info">Encontrados ${expenses.length} gastos para processar...</div>`;
+            
+            let added = 0;
+            let skipped = 0;
+            
+            for (const expense of expenses) {
+                const added_expense = await addSicrediExpenseIfNotExists(expense);
+                if (added_expense) {
+                    added++;
+                } else {
+                    skipped++;
+                }
+            }
+            
+            progressDiv.innerHTML = '';
+            resultDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <strong>Upload concluído!</strong><br>
+                    Gastos adicionados: ${added}<br>
+                    Gastos ignorados (já existentes): ${skipped}
+                </div>
+            `;
+            
+            // Recarregar a lista de gastos
+            loadSicrediExpenses();
+            updateBillsSummary();
+            
+            // Limpar o input
+            fileInput.value = '';
+            
+        } catch (error) {
+            console.error('Erro ao processar arquivo:', error);
+            progressDiv.innerHTML = '';
+            resultDiv.innerHTML = `<div class="alert alert-danger">Erro ao processar arquivo: ${error.message}</div>`;
+        }
+    });
+
+    // Event listener para upload do Porto
+    document.getElementById('porto-upload-btn').addEventListener('click', async function() {
+        const fileInput = document.getElementById('porto-upload');
+        const progressDiv = document.getElementById('porto-upload-progress');
+        const resultDiv = document.getElementById('porto-upload-result');
+        
+        if (!fileInput.files.length) {
+            alert('Por favor, selecione um arquivo XLS');
+            return;
+        }
+        
+        const file = fileInput.files[0];
+        progressDiv.innerHTML = '<div class="alert alert-info">Processando arquivo...</div>';
+        resultDiv.innerHTML = '';
+        
+        try {
+            const data = await readExcelFile(file);
+            const expenses = parsePortoExcel(data);
+            
+            progressDiv.innerHTML = `<div class="alert alert-info">Encontrados ${expenses.length} gastos para processar...</div>`;
+            
+            let added = 0;
+            let skipped = 0;
+            
+            for (const expense of expenses) {
+                const added_expense = await addPortoExpenseIfNotExists(expense);
+                if (added_expense) {
+                    added++;
+                } else {
+                    skipped++;
+                }
+            }
+            
+            progressDiv.innerHTML = '';
+            resultDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <strong>Upload concluído!</strong><br>
+                    Gastos adicionados: ${added}<br>
+                    Gastos ignorados (já existentes): ${skipped}
+                </div>
+            `;
+            
+            // Recarregar a lista de gastos
+            loadPortoExpenses();
+            updateBillsSummary();
+            
+            // Limpar o input
+            fileInput.value = '';
+            
+        } catch (error) {
+            console.error('Erro ao processar arquivo:', error);
+            progressDiv.innerHTML = '';
+            resultDiv.innerHTML = `<div class="alert alert-danger">Erro ao processar arquivo: ${error.message}</div>`;
+        }
+    });
+
+    // ========== FIM DAS FUNÇÕES DE UPLOAD ==========
+
     // Bills Summary Functions
     function updateBillsSummary() {
         const month = currentMonth;
@@ -1329,11 +1820,25 @@ function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
                     let installmentText = '';
                     
                     if (expense.installments && expense.installments > 1) {
-                        // For installment expenses, check if current installment matches selected month
-                        // This is a simplified logic - you might want to implement more sophisticated logic
-                        // based on start date or other criteria
-                        if (expense.currentInstallment) {
-                            installmentText = ` <span class="installment-badge">${expense.currentInstallment}/${expense.installments}</span>`;
+                        // Para gastos fixos parcelados, calcula a parcela atual baseada no mês selecionado
+                        // Usa a data de criação como referência
+                        const createdAt = new Date(expense.createdAt);
+                        const createdMonth = createdAt.getMonth() + 1;
+                        const createdYear = createdAt.getFullYear();
+                        
+                        // Calcula a diferença em meses entre a criação e o mês selecionado
+                        const monthDiff = (year - createdYear) * 12 + (month - createdMonth);
+                        
+                        if (monthDiff >= 0 && monthDiff < expense.installments) {
+                            const currentInstallment = monthDiff + 1;
+                            installmentText = ` <span class="installment-badge">${currentInstallment}/${expense.installments}</span>`;
+                            
+                            // Atualiza a parcela atual no banco de dados se for diferente
+                            if (expense.currentInstallment !== currentInstallment) {
+                                database.ref(`users/${currentUser.uid}/fixedExpenses/${key}/currentInstallment`).set(currentInstallment);
+                            }
+                        } else {
+                            shouldDisplay = false;
                         }
                     }
                     
@@ -1419,26 +1924,26 @@ function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
             });
     }
 
-function calculateInstallmentsForMonth(expense, targetMonth, targetYear, cardType) {
-    const installments = [];
-    const dueDates = calculateDueDates(expense.date, expense.closingDay, cardType, expense.installments);
-    
-    // Garantir que são números
-    const month = parseInt(targetMonth);
-    const year = parseInt(targetYear);
-    
-    dueDates.forEach(dueDate => {
-        if (dueDate.month === month && dueDate.year === year) {
-            installments.push({
-                installment: dueDate.installment,
-                value: expense.value,
-                date: dueDate.date
-            });
-        }
-    });
-    
-    return installments;
-}
+    function calculateInstallmentsForMonth(expense, targetMonth, targetYear, cardType) {
+        const installments = [];
+        const dueDates = calculateDueDates(expense.date, expense.closingDay, cardType, expense.installments);
+        
+        // Garantir que são números
+        const month = parseInt(targetMonth);
+        const year = parseInt(targetYear);
+        
+        dueDates.forEach(dueDate => {
+            if (dueDate.month === month && dueDate.year === year) {
+                installments.push({
+                    installment: dueDate.installment,
+                    value: expense.value,
+                    date: dueDate.date
+                });
+            }
+        });
+        
+        return installments;
+    }
 
     function updateGeneralTotals() {
         const totalExpenses = summaryData.fixed + summaryData.sicredi + summaryData.porto + summaryData.mp;
@@ -1515,7 +2020,7 @@ function calculateInstallmentsForMonth(expense, targetMonth, targetYear, cardTyp
     }
 
     // Payment toggle functions
-    function toggleFixedPayment(expenseKey, month, year) {
+    window.toggleFixedPayment = function(expenseKey, month, year) {
         const paidRef = database.ref(`users/${currentUser.uid}/fixedExpenses/${expenseKey}/paidMonths/${year}-${month}`);
         
         paidRef.once('value').then(snapshot => {
@@ -1524,9 +2029,9 @@ function calculateInstallmentsForMonth(expense, targetMonth, targetYear, cardTyp
                 updateBillsSummary();
             });
         });
-    }
+    };
 
-    function toggleCardPayment(cardType, expenseKey, installmentNumber, month, year) {
+    window.toggleCardPayment = function(cardType, expenseKey, installmentNumber, month, year) {
         const paidRef = database.ref(`users/${currentUser.uid}/${cardType}Expenses/${expenseKey}/paidInstallments/${year}-${month}-${installmentNumber}`);
         
         paidRef.once('value').then(snapshot => {
@@ -1535,7 +2040,7 @@ function calculateInstallmentsForMonth(expense, targetMonth, targetYear, cardTyp
                 updateBillsSummary();
             });
         });
-    }
+    };
 
     // Initialize the app when the page loads
     document.addEventListener('DOMContentLoaded', () => {
@@ -1544,5 +2049,8 @@ function calculateInstallmentsForMonth(expense, targetMonth, targetYear, cardTyp
         document.getElementById('sicredi-date').value = today;
         document.getElementById('porto-date').value = today;
         document.getElementById('mp-date').value = today;
+        
+        // Setup currency inputs
+        setupCurrencyInputs();
     });
 </script>
