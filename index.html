@@ -2052,117 +2052,127 @@
     }
 
     function loadFixedExpensesForBills(month, year) {
-        database.ref(`users/${currentUser.uid}/fixedExpenses`).once('value')
-            .then((snapshot) => {
-                let totalFixed = 0;
-                let fixedHtml = '';
+    database.ref(`users/${currentUser.uid}/fixedExpenses`).once('value')
+        .then((snapshot) => {
+            let totalFixed = 0;
+            let fixedHtml = '';
+            
+            snapshot.forEach((childSnapshot) => {
+                const expense = childSnapshot.val();
+                const key = childSnapshot.key;
                 
-                snapshot.forEach((childSnapshot) => {
-                    const expense = childSnapshot.val();
-                    const key = childSnapshot.key;
+                // Verificar se o gasto fixo está marcado como pago para este mês
+                const paid = expense.paidMonths && expense.paidMonths[`${year}-${month}`];
+                
+                // Check if this fixed expense should be displayed this month
+                let shouldDisplay = true;
+                let installmentText = '';
+                
+                if (expense.installments && expense.installments > 1) {
+                    // Para gastos fixos parcelados, calcula a parcela atual baseada no mês selecionado
+                    const createdAt = expense.purchaseDate ? new Date(expense.purchaseDate) : new Date(expense.createdAt);
+                    const createdMonth = createdAt.getMonth() + 1;
+                    const createdYear = createdAt.getFullYear();
                     
-                    // Verificar se o gasto fixo está marcado como pago para este mês
-                    const paid = expense.paidMonths && expense.paidMonths[`${year}-${month}`];
+                    // Calcula a diferença em meses entre a criação e o mês selecionado
+                    const monthDiff = (year - createdYear) * 12 + (month - createdMonth);
                     
-                    // Check if this fixed expense should be displayed this month
-                    let shouldDisplay = true;
-                    let installmentText = '';
-                    
-                    if (expense.installments && expense.installments > 1) {
-                        // Para gastos fixos parcelados, calcula a parcela atual baseada no mês selecionado
-                        // Usa a data de criação como referência
-                        const createdAt = expense.purchaseDate ? new Date(expense.purchaseDate) : new Date(expense.createdAt);
-                        const createdMonth = createdAt.getMonth() + 1;
-                        const createdYear = createdAt.getFullYear();
-                        
-                        // Calcula a diferença em meses entre a criação e o mês selecionado
-                        const monthDiff = (year - createdYear) * 12 + (month - createdMonth);
-                        
-                        if (monthDiff >= 0 && monthDiff < expense.installments) {
-                            const currentInstallment = monthDiff + (expense.currentInstallment || 1);
-                            installmentText = ` <span class="installment-badge">${currentInstallment}/${expense.installments}</span>`;
-                        } else {
-                            shouldDisplay = false;
-                        }
+                    if (monthDiff >= 0 && monthDiff < expense.installments) {
+                        const currentInstallment = monthDiff + (expense.currentInstallment || 1);
+                        installmentText = ` <span class="installment-badge">${currentInstallment}/${expense.installments}</span>`;
+                    } else {
+                        shouldDisplay = false;
                     }
+                }
+                
+                if (shouldDisplay) {
+                    totalFixed += expense.value;
                     
-                    if (shouldDisplay) {
-                        totalFixed += expense.value; // Sempre soma o valor, independente de estar pago
-                        
-                        fixedHtml += `
-                            <div class="expense-item d-flex justify-content-between align-items-center ${paid ? 'paid' : ''}">
-                                <div>
-                                    <span>${expense.name}${installmentText}</span>
-                                    <small class="text-muted d-block">Vencimento: dia ${expense.dueDay}</small>
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <span class="me-2">${formatCurrency(expense.value)}</span>
+                    // Verificar se é empréstimo (tem observation) para mostrar o botão
+                    const isLoan = expense.observation ? true : false;
+                    
+                    fixedHtml += `
+                        <div class="expense-item d-flex justify-content-between align-items-center ${paid ? 'paid' : ''}">
+                            <div>
+                                <span>${expense.name}${installmentText}</span>
+                                <small class="text-muted d-block">Vencimento: dia ${expense.dueDay}</small>
+                                ${expense.observation ? `<small class="text-muted d-block">Empréstimo: ${expense.observation}</small>` : ''}
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <span class="me-2">${formatCurrency(expense.value)}</span>
+                                ${isLoan ? `
                                     <button class="btn btn-sm ${paid ? 'btn-success' : 'btn-outline-success'}" 
                                             onclick="toggleFixedPayment('${key}', ${month}, ${year})">
                                         <i class="fas ${paid ? 'fa-check-circle' : 'fa-circle'}"></i>
                                     </button>
-                                </div>
+                                ` : ''}
                             </div>
-                        `;
-                    }
-                });
-                
-                document.getElementById('fixed-summary').innerHTML = fixedHtml || '<p class="text-muted">Nenhum gasto fixo</p>';
-                document.getElementById('fixed-summary-total').innerHTML = `<strong>Total: ${formatCurrency(totalFixed)}</strong>`;
-                
-                summaryData.fixed = totalFixed;
-                updateGeneralTotals();
+                        </div>
+                    `;
+                }
             });
-    }
+            
+            document.getElementById('fixed-summary').innerHTML = fixedHtml || '<p class="text-muted">Nenhum gasto fixo</p>';
+            document.getElementById('fixed-summary-total').innerHTML = `<strong>Total: ${formatCurrency(totalFixed)}</strong>`;
+            
+            summaryData.fixed = totalFixed;
+            updateGeneralTotals();
+        });
+}
 
-    function loadCreditCardExpensesForBills(cardType, month, year) {
-        database.ref(`users/${currentUser.uid}/${cardType}Expenses`).once('value')
-            .then((snapshot) => {
-                let totalCard = 0;
-                let cardHtml = '';
+function loadCreditCardExpensesForBills(cardType, month, year) {
+    database.ref(`users/${currentUser.uid}/${cardType}Expenses`).once('value')
+        .then((snapshot) => {
+            let totalCard = 0;
+            let cardHtml = '';
+            
+            snapshot.forEach((childSnapshot) => {
+                const expense = childSnapshot.val();
+                const key = childSnapshot.key;
                 
-                snapshot.forEach((childSnapshot) => {
-                    const expense = childSnapshot.val();
-                    const key = childSnapshot.key;
+                // Calcular parcelas para este mês/ano
+                const installmentsThisMonth = calculateInstallmentsForMonth(expense, month, year, cardType);
+                
+                installmentsThisMonth.forEach((installment) => {
+                    const paid = expense.paidInstallments && expense.paidInstallments[`${year}-${month}-${installment.installment}`];
                     
-                    // Calcular parcelas para este mês/ano
-                    const installmentsThisMonth = calculateInstallmentsForMonth(expense, month, year, cardType);
+                    totalCard += installment.value;
                     
-                    installmentsThisMonth.forEach((installment) => {
-                        const paid = expense.paidInstallments && expense.paidInstallments[`${year}-${month}-${installment.installment}`];
-                        
-                        totalCard += installment.value; // Sempre soma o valor, independente de estar pago
-                        
-                        // Show purchase date instead of due date
-                        const purchaseDate = fixLocalDate(expense.date).toLocaleDateString();
-                        
-                        cardHtml += `
-                            <div class="expense-item d-flex justify-content-between align-items-center ${paid ? 'paid' : ''}">
-                                <div>
-                                    <span>${expense.name} (${installment.installment}/${expense.installments})</span>
-                                    <small class="text-muted d-block">Compra: ${purchaseDate}</small>
-                                    ${expense.observation ? `<small class="text-muted d-block">Empréstimo: ${expense.observation}</small>` : ''}
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <span class="me-2">${formatCurrency(installment.value)}</span>
+                    // Verificar se é empréstimo (tem observation) para mostrar o botão
+                    const isLoan = expense.observation ? true : false;
+                    
+                    // Show purchase date instead of due date
+                    const purchaseDate = fixLocalDate(expense.date).toLocaleDateString();
+                    
+                    cardHtml += `
+                        <div class="expense-item d-flex justify-content-between align-items-center ${paid ? 'paid' : ''}">
+                            <div>
+                                <span>${expense.name} (${installment.installment}/${expense.installments})</span>
+                                <small class="text-muted d-block">Compra: ${purchaseDate}</small>
+                                ${expense.observation ? `<small class="text-muted d-block">Empréstimo: ${expense.observation}</small>` : ''}
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <span class="me-2">${formatCurrency(installment.value)}</span>
+                                ${isLoan ? `
                                     <button class="btn btn-sm ${paid ? 'btn-success' : 'btn-outline-success'}" 
                                             onclick="toggleCardPayment('${cardType}', '${key}', ${installment.installment}, ${month}, ${year})">
                                         <i class="fas ${paid ? 'fa-check-circle' : 'fa-circle'}"></i>
                                     </button>
-                                </div>
+                                ` : ''}
                             </div>
-                        `;
-                    });
+                        </div>
+                    `;
                 });
-                
-                document.getElementById(`${cardType}-summary`).innerHTML = cardHtml || '<p class="text-muted">Nenhum gasto</p>';
-                document.getElementById(`${cardType}-summary-total`).innerHTML = `<strong>Total: ${formatCurrency(totalCard)}</strong>`;
-                
-                summaryData[cardType] = totalCard;
-                updateGeneralTotals();
-                loadLoansDetailed(); // Atualiza empréstimos quando os cartões são carregados
             });
-    }
+            
+            document.getElementById(`${cardType}-summary`).innerHTML = cardHtml || '<p class="text-muted">Nenhum gasto</p>';
+            document.getElementById(`${cardType}-summary-total`).innerHTML = `<strong>Total: ${formatCurrency(totalCard)}</strong>`;
+            
+            summaryData[cardType] = totalCard;
+            updateGeneralTotals();
+            loadLoansDetailed();
+        });
+}
 
     function calculateInstallmentsForMonth(expense, targetMonth, targetYear, cardType) {
         const installments = [];
@@ -2195,83 +2205,139 @@
         document.getElementById('real-expenses').textContent = formatCurrency(realExpenses);
     }
 
-    // Load loans detailed view
-    function loadLoansDetailed() {
-        const month = currentMonth;
-        const year = currentYear;
-        const loans = {};
-        
-        // Process all card types for loans
-        const promises = ['sicredi', 'porto', 'mp'].map(cardType => {
-            return database.ref(`users/${currentUser.uid}/${cardType}Expenses`).once('value')
-                .then((snapshot) => {
-                    snapshot.forEach((childSnapshot) => {
-                        const expense = childSnapshot.val();
-                        
-                        if (expense.observation) {
-                            const installmentsThisMonth = calculateInstallmentsForMonth(expense, month, year, cardType);
+// Load loans detailed view
+function loadLoansDetailed() {
+    const month = currentMonth;
+    const year = currentYear;
+    const loans = {};
+    
+    // Process all card types for loans
+    const promises = ['sicredi', 'porto', 'mp'].map(cardType => {
+        return database.ref(`users/${currentUser.uid}/${cardType}Expenses`).once('value')
+            .then((snapshot) => {
+                snapshot.forEach((childSnapshot) => {
+                    const expense = childSnapshot.val();
+                    const expenseKey = childSnapshot.key;
+                    
+                    if (expense.observation) {
+                        // Calcular TODAS as parcelas do empréstimo, não apenas do mês atual
+                        for (let i = 1; i <= expense.installments; i++) {
+                            // Calcular a data de vencimento desta parcela
+                            const dueDates = calculateDueDates(expense.date, expense.closingDay, cardType, expense.installments);
+                            const dueDate = dueDates[i - 1]; // Array começa em 0
                             
-                            installmentsThisMonth.forEach(installment => {
-                                const paid = expense.paidInstallments && expense.paidInstallments[`${year}-${month}-${installment.installment}`];
+                            if (dueDate) {
+                                const parcelMonth = dueDate.month;
+                                const parcelYear = dueDate.year;
                                 
-                                if (!loans[expense.observation]) {
-                                    loans[expense.observation] = {
-                                        total: 0,
-                                        details: []
-                                    };
+                                // Verificar se a parcela já passou (mês/ano anterior ou igual ao atual)
+                                const isPastOrCurrent = (parcelYear < year) || (parcelYear === year && parcelMonth <= month);
+                                
+                                if (isPastOrCurrent) {
+                                    // Verificar se esta parcela específica está paga
+                                    const paid = expense.paidInstallments && expense.paidInstallments[`${parcelYear}-${parcelMonth}-${i}`];
+                                    const paymentDate = expense.paymentDates && expense.paymentDates[`${parcelYear}-${parcelMonth}-${i}`];
+                                    
+                                    // Se NÃO estiver paga, incluir no total
+                                    if (!loans[expense.observation]) {
+                                        loans[expense.observation] = {
+                                            total: 0,
+                                            details: []
+                                        };
+                                    }
+                                    
+                                    // Formatar data de pagamento se existir
+                                    let paymentDateFormatted = '';
+                                    if (paymentDate) {
+                                        const date = new Date(paymentDate);
+                                        paymentDateFormatted = date.toLocaleDateString('pt-BR');
+                                    }
+                                    
+                                    loans[expense.observation].details.push({
+                                        cardType: cardType,
+                                        date: expense.date,
+                                        name: expense.name,
+                                        value: expense.value,
+                                        paid: paid || false,
+                                        paymentDate: paymentDateFormatted,
+                                        installment: i,
+                                        totalInstallments: expense.installments,
+                                        dueMonth: parcelMonth,
+                                        dueYear: parcelYear,
+                                        status: paid ? `Pago em ${paymentDateFormatted}` : (parcelYear === year && parcelMonth === month ? 'Pendente (mês atual)' : 'Atrasado')
+                                    });
+                                    
+                                    // Só soma ao total se NÃO estiver paga
+                                    if (!paid) {
+                                        loans[expense.observation].total += expense.value;
+                                    }
                                 }
-                                
-                                loans[expense.observation].total += installment.value;
-                                loans[expense.observation].details.push({
-                                    cardType: cardType,
-                                    date: expense.date,
-                                    name: expense.name,
-                                    value: installment.value,
-                                    paid: paid,
-                                    installment: installment.installment,
-                                    totalInstallments: expense.installments
-                                });
-                            });
+                            }
                         }
-                    });
+                    }
                 });
-        });
+            });
+    });
+    
+    Promise.all(promises).then(() => {
+        // Calculate total loans
+        let totalLoans = 0;
+        let loansHtml = '';
         
-        Promise.all(promises).then(() => {
-            // Calculate total loans
-            let totalLoans = 0;
-            let loansHtml = '';
+        for (const [person, data] of Object.entries(loans)) {
+            totalLoans += data.total;
             
-            for (const [person, data] of Object.entries(loans)) {
-                totalLoans += data.total;
-                loansHtml += `
-                    <div class="card mb-3">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0">${person}</h6>
-                                <span class="fw-bold">${formatCurrency(data.total)}</span>
+            // Contar parcelas atrasadas para mostrar um badge
+            const atrasadas = data.details.filter(d => d.status === 'Atrasado').length;
+            const atrasadoBadge = atrasadas > 0 ? 
+                `<span class="badge bg-danger ms-2">${atrasadas} parcela(s) atrasada(s)</span>` : '';
+            
+            loansHtml += `
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0">${person} ${atrasadoBadge}</h6>
+                                <small class="text-muted">Total devido: ${formatCurrency(data.total)}</small>
                             </div>
-                            <button class="btn btn-sm btn-outline-primary mt-2" onclick="showLoanDetails('${person}', ${JSON.stringify(data.details).replace(/"/g, '&quot;')})">
-                                Ver detalhes
-                            </button>
+                            <span class="fw-bold">${formatCurrency(data.total)}</span>
                         </div>
+                        <button class="btn btn-sm btn-outline-primary mt-2" onclick='showLoanDetails("${person}", ${JSON.stringify(data.details).replace(/'/g, "\\'")})'>
+                            Ver detalhes
+                        </button>
                     </div>
-                `;
-            }
-            
-            document.getElementById('loans-detailed-list').innerHTML = loansHtml || '<p class="text-muted">Nenhum empréstimo para este mês</p>';
-            summaryData.loans = totalLoans;
-            updateGeneralTotals();
-        });
-    }
-
-    // Show loan details modal
-    window.showLoanDetails = function(person, details) {
-        const modal = new bootstrap.Modal(document.getElementById('loanDetailsModal'));
-        document.getElementById('loanDetailsTitle').textContent = `Detalhes do empréstimo - ${person}`;
+                </div>
+            `;
+        }
         
-        let detailsHtml = '';
-        details.forEach(detail => {
+        document.getElementById('loans-detailed-list').innerHTML = loansHtml || '<p class="text-muted">Nenhum empréstimo pendente</p>';
+        summaryData.loans = totalLoans;
+        updateGeneralTotals();
+    });
+}
+
+// Show loan details modal
+window.showLoanDetails = function(person, details) {
+    const modal = new bootstrap.Modal(document.getElementById('loanDetailsModal'));
+    document.getElementById('loanDetailsTitle').textContent = `Detalhes do empréstimo - ${person}`;
+    
+    // Calcular total devido
+    const totalDevido = details.reduce((sum, detail) => sum + (detail.paid ? 0 : detail.value), 0);
+    
+    let detailsHtml = `
+        <div class="alert alert-info mb-3">
+            <strong>Total devido: ${formatCurrency(totalDevido)}</strong>
+        </div>
+    `;
+    
+    // Agrupar por status
+    const atrasados = details.filter(d => d.status === 'Atrasado');
+    const pendentesAtual = details.filter(d => d.status === 'Pendente (mês atual)');
+    const pagos = details.filter(d => d.status.includes('Pago em'));
+    
+    if (atrasados.length > 0) {
+        detailsHtml += '<h6 class="text-danger mb-2">Parcelas Atrasadas</h6>';
+        atrasados.forEach(detail => {
             const cardTypeNames = {
                 'sicredi': 'Sicredi',
                 'porto': 'Porto',
@@ -2279,51 +2345,196 @@
             };
             
             detailsHtml += `
-                <div class="loan-detail-item">
+                <div class="loan-detail-item border-start border-danger border-4 ps-2 mb-2">
                     <div class="d-flex justify-content-between">
                         <div>
                             <strong>${detail.name}</strong><br>
                             <small>Cartão: ${cardTypeNames[detail.cardType]}</small><br>
-                            <small>Data da compra: ${fixLocalDate(detail.date).toLocaleDateString()}</small><br>
-                            <small>Parcela: ${detail.installment}/${detail.totalInstallments}</small>
+                            <small>Data compra: ${fixLocalDate(detail.date).toLocaleDateString()}</small><br>
+                            <small>Parcela: ${detail.installment}/${detail.totalInstallments}</small><br>
+                            <small class="text-danger">Vencimento: ${detail.dueMonth}/${detail.dueYear}</small>
                         </div>
                         <div class="text-end">
                             <span class="fw-bold">${formatCurrency(detail.value)}</span><br>
-                            ${detail.paid ? '<span class="badge bg-success">Pago</span>' : '<span class="badge bg-warning">Pendente</span>'}
+                            <span class="badge bg-danger">Atrasado</span>
                         </div>
                     </div>
                 </div>
             `;
         });
-        
-        document.getElementById('loanDetailsBody').innerHTML = detailsHtml;
-        modal.show();
-    };
+    }
+    
+    if (pendentesAtual.length > 0) {
+        detailsHtml += '<h6 class="text-warning mt-3 mb-2">Pendentes (Mês Atual)</h6>';
+        pendentesAtual.forEach(detail => {
+            const cardTypeNames = {
+                'sicredi': 'Sicredi',
+                'porto': 'Porto',
+                'mp': 'Mercado Pago'
+            };
+            
+            detailsHtml += `
+                <div class="loan-detail-item border-start border-warning border-4 ps-2 mb-2">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <strong>${detail.name}</strong><br>
+                            <small>Cartão: ${cardTypeNames[detail.cardType]}</small><br>
+                            <small>Data compra: ${fixLocalDate(detail.date).toLocaleDateString()}</small><br>
+                            <small>Parcela: ${detail.installment}/${detail.totalInstallments}</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="fw-bold">${formatCurrency(detail.value)}</span><br>
+                            <span class="badge bg-warning">Pendente</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    if (pagos.length > 0) {
+        detailsHtml += '<h6 class="text-success mt-3 mb-2">Parcelas Pagas</h6>';
+        pagos.forEach(detail => {
+            const cardTypeNames = {
+                'sicredi': 'Sicredi',
+                'porto': 'Porto',
+                'mp': 'Mercado Pago'
+            };
+            
+            detailsHtml += `
+                <div class="loan-detail-item border-start border-success border-4 ps-2 mb-2">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <strong>${detail.name}</strong><br>
+                            <small>Cartão: ${cardTypeNames[detail.cardType]}</small><br>
+                            <small>Data compra: ${fixLocalDate(detail.date).toLocaleDateString()}</small><br>
+                            <small>Parcela: ${detail.installment}/${detail.totalInstallments}</small><br>
+                            <small class="text-success">Pago em: ${detail.paymentDate}</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="fw-bold">${formatCurrency(detail.value)}</span><br>
+                            <span class="badge bg-success">Pago</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    document.getElementById('loanDetailsBody').innerHTML = detailsHtml;
+    modal.show();
+};
 
-    // Payment toggle functions
-    window.toggleFixedPayment = function(expenseKey, month, year) {
-        const paidRef = database.ref(`users/${currentUser.uid}/fixedExpenses/${expenseKey}/paidMonths/${year}-${month}`);
-        
-        paidRef.once('value').then(snapshot => {
-            const isPaid = snapshot.val();
-            paidRef.set(!isPaid).then(() => {
-                updateBillsSummary();
-                loadLoansDetailed();
+// Payment toggle functions com data de pagamento
+window.toggleFixedPayment = function(expenseKey, month, year) {
+    // Verificar se é empréstimo antes de permitir marcar como pago
+    database.ref(`users/${currentUser.uid}/fixedExpenses/${expenseKey}`).once('value')
+        .then((snapshot) => {
+            const expense = snapshot.val();
+            
+            // Se NÃO for empréstimo (não tem observation), não faz nada ou mostra mensagem
+            if (!expense.observation) {
+                alert('Apenas gastos vinculados a empréstimos podem ser marcados como pagos nesta seção.');
+                return;
+            }
+            
+            const paidRef = database.ref(`users/${currentUser.uid}/fixedExpenses/${expenseKey}/paidMonths/${year}-${month}`);
+            
+            paidRef.once('value').then(snapshot => {
+                const isPaid = snapshot.val();
+                
+                if (!isPaid) {
+                    // Se não está pago, pergunta a data
+                    const paymentDate = prompt('Informe a data de quitação (DD/MM/AAAA):', new Date().toLocaleDateString('pt-BR'));
+                    
+                    if (paymentDate) {
+                        // Validar formato da data
+                        const dateParts = paymentDate.split('/');
+                        if (dateParts.length === 3) {
+                            const formattedDate = `${dateParts[2]}-${dateParts[1].padStart(2, '0')}-${dateParts[0].padStart(2, '0')}`;
+                            
+                            // Salvar a data de pagamento junto com o status
+                            const updates = {};
+                            updates[`users/${currentUser.uid}/fixedExpenses/${expenseKey}/paidMonths/${year}-${month}`] = true;
+                            updates[`users/${currentUser.uid}/fixedExpenses/${expenseKey}/paymentDates/${year}-${month}`] = formattedDate;
+                            
+                            database.ref().update(updates).then(() => {
+                                updateBillsSummary();
+                                loadLoansDetailed();
+                            });
+                        } else {
+                            alert('Formato de data inválido. Use DD/MM/AAAA');
+                        }
+                    }
+                } else {
+                    // Se está pago, apenas remove o status (sem data)
+                    const updates = {};
+                    updates[`users/${currentUser.uid}/fixedExpenses/${expenseKey}/paidMonths/${year}-${month}`] = null;
+                    updates[`users/${currentUser.uid}/fixedExpenses/${expenseKey}/paymentDates/${year}-${month}`] = null;
+                    
+                    database.ref().update(updates).then(() => {
+                        updateBillsSummary();
+                        loadLoansDetailed();
+                    });
+                }
             });
         });
-    };
+};
 
-    window.toggleCardPayment = function(cardType, expenseKey, installmentNumber, month, year) {
-        const paidRef = database.ref(`users/${currentUser.uid}/${cardType}Expenses/${expenseKey}/paidInstallments/${year}-${month}-${installmentNumber}`);
-        
-        paidRef.once('value').then(snapshot => {
-            const isPaid = snapshot.val();
-            paidRef.set(!isPaid).then(() => {
-                updateBillsSummary();
-                loadLoansDetailed();
+window.toggleCardPayment = function(cardType, expenseKey, installmentNumber, month, year) {
+    // Verificar se é empréstimo antes de permitir marcar como pago
+    database.ref(`users/${currentUser.uid}/${cardType}Expenses/${expenseKey}`).once('value')
+        .then((snapshot) => {
+            const expense = snapshot.val();
+            
+            // Se NÃO for empréstimo (não tem observation), não faz nada
+            if (!expense.observation) {
+                alert('Apenas gastos vinculados a empréstimos podem ser marcados como pagos nesta seção.');
+                return;
+            }
+            
+            const paidRef = database.ref(`users/${currentUser.uid}/${cardType}Expenses/${expenseKey}/paidInstallments/${year}-${month}-${installmentNumber}`);
+            
+            paidRef.once('value').then(snapshot => {
+                const isPaid = snapshot.val();
+                
+                if (!isPaid) {
+                    // Se não está pago, pergunta a data
+                    const paymentDate = prompt('Informe a data de quitação (DD/MM/AAAA):', new Date().toLocaleDateString('pt-BR'));
+                    
+                    if (paymentDate) {
+                        // Validar formato da data
+                        const dateParts = paymentDate.split('/');
+                        if (dateParts.length === 3) {
+                            const formattedDate = `${dateParts[2]}-${dateParts[1].padStart(2, '0')}-${dateParts[0].padStart(2, '0')}`;
+                            
+                            // Salvar a data de pagamento junto com o status
+                            const updates = {};
+                            updates[`users/${currentUser.uid}/${cardType}Expenses/${expenseKey}/paidInstallments/${year}-${month}-${installmentNumber}`] = true;
+                            updates[`users/${currentUser.uid}/${cardType}Expenses/${expenseKey}/paymentDates/${year}-${month}-${installmentNumber}`] = formattedDate;
+                            
+                            database.ref().update(updates).then(() => {
+                                updateBillsSummary();
+                                loadLoansDetailed();
+                            });
+                        } else {
+                            alert('Formato de data inválido. Use DD/MM/AAAA');
+                        }
+                    }
+                } else {
+                    // Se está pago, apenas remove o status (sem data)
+                    const updates = {};
+                    updates[`users/${currentUser.uid}/${cardType}Expenses/${expenseKey}/paidInstallments/${year}-${month}-${installmentNumber}`] = null;
+                    updates[`users/${currentUser.uid}/${cardType}Expenses/${expenseKey}/paymentDates/${year}-${month}-${installmentNumber}`] = null;
+                    
+                    database.ref().update(updates).then(() => {
+                        updateBillsSummary();
+                        loadLoansDetailed();
+                    });
+                }
             });
         });
-    };
+};
 
     // Initialize the app when the page loads
     document.addEventListener('DOMContentLoaded', () => {
