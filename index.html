@@ -142,6 +142,62 @@
             font-size: 0.9rem;
             margin-top: 10px;
         }
+        
+        .duplicate-tag {
+            background-color: #ffc107;
+            color: #000;
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin-left: 8px;
+            cursor: pointer;
+            display: inline-block;
+        }
+        
+        .duplicate-tag:hover {
+            background-color: #ffca2c;
+        }
+        
+        .expand-btn {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        
+        .expand-btn:hover {
+            color: var(--secondary-color);
+        }
+        
+        .loan-detail-modal .modal-body {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .loan-detail-item {
+            border-bottom: 1px solid #eee;
+            padding: 10px 0;
+        }
+        
+        .loan-detail-item:last-child {
+            border-bottom: none;
+        }
+        
+        .fixed-type-selector {
+            margin-bottom: 15px;
+        }
+        
+        .fixed-type-btn {
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .fixed-type-btn.active {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
     </style>
 </head>
 <body>
@@ -196,6 +252,9 @@
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="pills-bills-tab" data-bs-toggle="pill" data-bs-target="#pills-bills" type="button" role="tab">Contas a Pagar</button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="pills-loans-tab" data-bs-toggle="pill" data-bs-target="#pills-loans" type="button" role="tab">Empréstimos</button>
+                </li>
             </ul>
 
             <div class="tab-content" id="pills-tabContent">
@@ -206,8 +265,14 @@
                             <h5 class="mb-0">Adicionar Gasto Fixo</h5>
                         </div>
                         <div class="card-body">
+                            <div class="fixed-type-selector">
+                                <button type="button" class="btn btn-outline-primary fixed-type-btn active" data-type="fixed">Fixo (mesmo valor)</button>
+                                <button type="button" class="btn btn-outline-primary fixed-type-btn" data-type="variable">Variável (valor muda)</button>
+                                <button type="button" class="btn btn-outline-primary fixed-type-btn" data-type="installment">Parcelado (com data)</button>
+                            </div>
+                            
                             <form id="fixed-expense-form">
-                                <div class="row">
+                                <div class="row" id="fixed-common-fields">
                                     <div class="col-md-3">
                                         <div class="mb-3">
                                             <label for="fixed-name" class="form-label">Nome do Gasto</label>
@@ -226,18 +291,30 @@
                                             <input type="number" class="form-control" id="fixed-due-day" min="1" max="31" required>
                                         </div>
                                     </div>
-                                    <div class="col-md-2">
+                                </div>
+                                
+                                <div class="row" id="fixed-installment-fields" style="display: none;">
+                                    <div class="col-md-3">
                                         <div class="mb-3">
-                                            <label for="fixed-installments" class="form-label">Parcelas</label>
-                                            <input type="number" class="form-control" id="fixed-installments" min="1" value="1">
+                                            <label for="fixed-purchase-date" class="form-label">Data da Compra</label>
+                                            <input type="date" class="form-control" id="fixed-purchase-date">
                                         </div>
                                     </div>
                                     <div class="col-md-2">
                                         <div class="mb-3">
-                                            <label for="fixed-current-installment" class="form-label">Parcela Atual</label>
-                                            <input type="number" class="form-control" id="fixed-current-installment" min="1" value="1">
+                                            <label for="fixed-total-installments" class="form-label">Total de Parcelas</label>
+                                            <input type="number" class="form-control" id="fixed-total-installments" min="1" value="1">
                                         </div>
                                     </div>
+                                    <div class="col-md-2">
+                                        <div class="mb-3">
+                                            <label for="fixed-start-installment" class="form-label">Parcela Inicial</label>
+                                            <input type="number" class="form-control" id="fixed-start-installment" min="1" value="1">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
                                     <div class="col-md-1 d-flex align-items-end">
                                         <button type="submit" class="btn btn-primary w-100">Adicionar</button>
                                     </div>
@@ -259,6 +336,7 @@
                                             <th>Valor (R$)</th>
                                             <th>Vencimento</th>
                                             <th>Parcelas</th>
+                                            <th>Tipo</th>
                                             <th>Ações</th>
                                         </tr>
                                     </thead>
@@ -570,9 +648,14 @@
                                 <div class="col-md-4">
                                     <div class="card summary-card">
                                         <div class="card-body">
-                                            <h6 class="card-title">Gastos Fixos</h6>
-                                            <div id="fixed-summary">
-                                                <!-- Fixed expenses summary will be loaded here -->
+                                            <h6 class="card-title">
+                                                Gastos Fixos
+                                                <button class="expand-btn" onclick="toggleSection('fixed-section')">
+                                                    <i class="fas fa-chevron-down"></i>
+                                                </button>
+                                            </h6>
+                                            <div id="fixed-section" class="expense-section">
+                                                <div id="fixed-summary"></div>
                                             </div>
                                             <div id="fixed-summary-total" class="mt-2"></div>
                                         </div>
@@ -581,9 +664,14 @@
                                 <div class="col-md-4">
                                     <div class="card summary-card">
                                         <div class="card-body">
-                                            <h6 class="card-title">Cartão Sicredi</h6>
-                                            <div id="sicredi-summary">
-                                                <!-- Sicredi summary will be loaded here -->
+                                            <h6 class="card-title">
+                                                Cartão Sicredi
+                                                <button class="expand-btn" onclick="toggleSection('sicredi-section')">
+                                                    <i class="fas fa-chevron-down"></i>
+                                                </button>
+                                            </h6>
+                                            <div id="sicredi-section" class="expense-section">
+                                                <div id="sicredi-summary"></div>
                                             </div>
                                             <div id="sicredi-summary-total" class="mt-2"></div>
                                         </div>
@@ -592,9 +680,14 @@
                                 <div class="col-md-4">
                                     <div class="card summary-card">
                                         <div class="card-body">
-                                            <h6 class="card-title">Cartão Porto</h6>
-                                            <div id="porto-summary">
-                                                <!-- Porto summary will be loaded here -->
+                                            <h6 class="card-title">
+                                                Cartão Porto
+                                                <button class="expand-btn" onclick="toggleSection('porto-section')">
+                                                    <i class="fas fa-chevron-down"></i>
+                                                </button>
+                                            </h6>
+                                            <div id="porto-section" class="expense-section">
+                                                <div id="porto-summary"></div>
                                             </div>
                                             <div id="porto-summary-total" class="mt-2"></div>
                                         </div>
@@ -605,9 +698,14 @@
                                 <div class="col-md-4">
                                     <div class="card summary-card">
                                         <div class="card-body">
-                                            <h6 class="card-title">Cartão Mercado Pago</h6>
-                                            <div id="mp-summary">
-                                                <!-- Mercado Pago summary will be loaded here -->
+                                            <h6 class="card-title">
+                                                Cartão Mercado Pago
+                                                <button class="expand-btn" onclick="toggleSection('mp-section')">
+                                                    <i class="fas fa-chevron-down"></i>
+                                                </button>
+                                            </h6>
+                                            <div id="mp-section" class="expense-section">
+                                                <div id="mp-summary"></div>
                                             </div>
                                             <div id="mp-summary-total" class="mt-2"></div>
                                         </div>
@@ -616,40 +714,38 @@
                                 <div class="col-md-8">
                                     <div class="card summary-card">
                                         <div class="card-body">
-                                            <h6 class="card-title">Empréstimos</h6>
-                                            <div id="loans-summary">
-                                                <!-- Loans summary will be loaded here -->
+                                            <h6 class="card-title">Resumo do Mês</h6>
+                                            <div class="row">
+                                                <div class="col-md-4">
+                                                    <p class="mb-1">Gastos Totais:</p>
+                                                    <p class="total-amount" id="total-expenses">R$ 0,00</p>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <p class="mb-1">Empréstimos:</p>
+                                                    <p class="total-amount" id="total-loans">R$ 0,00</p>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <p class="mb-1">Gastos Reais:</p>
+                                                    <p class="total-amount" id="real-expenses">R$ 0,00</p>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <div class="card summary-card">
-                                        <div class="card-body">
-                                            <h6 class="card-title">Resumo do Mês</h6>
-                                            <div class="row">
-                                                <div class="col-md-3">
-                                                    <p class="mb-1">Gastos Totais:</p>
-                                                    <p class="total-amount" id="total-expenses">R$ 0,00</p>
-                                                </div>
-                                                <div class="col-md-3">
-                                                    <p class="mb-1">Empréstimos:</p>
-                                                    <p class="total-amount" id="total-loans">R$ 0,00</p>
-                                                </div>
-                                                <div class="col-md-3">
-                                                    <p class="mb-1">Gastos Reais:</p>
-                                                    <p class="total-amount" id="real-expenses">R$ 0,00</p>
-                                                </div>
-                                                <div class="col-md-3">
-                                                    <p class="mb-1">Status:</p>
-                                                    <span id="payment-status" class="badge bg-success">Em dia</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empréstimos Tab -->
+                <div class="tab-pane fade" id="pills-loans" role="tabpanel">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Empréstimos - Detalhamento por Devedor</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="loans-detailed-list">
+                                <!-- Loans detailed list will be loaded here -->
                             </div>
                         </div>
                     </div>
@@ -678,6 +774,24 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="button" class="btn btn-primary" id="save-edit-btn">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loan Details Modal -->
+    <div class="modal fade" id="loanDetailsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="loanDetailsTitle">Detalhes do Empréstimo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body loan-detail-modal" id="loanDetailsBody">
+                    <!-- Loan details will be loaded here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
                 </div>
             </div>
         </div>
@@ -784,6 +898,7 @@
         loadPortoExpenses();
         loadMPExpenses();
         updateBillsSummary();
+        loadLoansDetailed();
     }
 
     // Event listeners for authentication
@@ -808,6 +923,43 @@
             currentUser = user;
             loadApp();
         }
+    });
+
+    // Toggle section expansion
+    window.toggleSection = function(sectionId) {
+        const section = document.getElementById(sectionId);
+        const btn = event.currentTarget;
+        const icon = btn.querySelector('i');
+        
+        if (section.style.display === 'none') {
+            section.style.display = 'block';
+            icon.className = 'fas fa-chevron-down';
+        } else {
+            section.style.display = 'none';
+            icon.className = 'fas fa-chevron-right';
+        }
+    };
+
+    // Fixed type selector
+    document.querySelectorAll('.fixed-type-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.fixed-type-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            const type = this.dataset.type;
+            const commonFields = document.getElementById('fixed-common-fields');
+            const installmentFields = document.getElementById('fixed-installment-fields');
+            
+            if (type === 'installment') {
+                installmentFields.style.display = 'flex';
+                document.getElementById('fixed-purchase-date').required = true;
+                document.getElementById('fixed-total-installments').required = true;
+            } else {
+                installmentFields.style.display = 'none';
+                document.getElementById('fixed-purchase-date').required = false;
+                document.getElementById('fixed-total-installments').required = false;
+            }
+        });
     });
     
     // Date utility functions
@@ -853,11 +1005,13 @@
         monthSelector.addEventListener('change', () => {
             currentMonth = parseInt(monthSelector.value);
             updateBillsSummary();
+            loadLoansDetailed();
         });
         
         yearSelector.addEventListener('change', () => {
             currentYear = parseInt(yearSelector.value);
             updateBillsSummary();
+            loadLoansDetailed();
         });
     }
 
@@ -1067,6 +1221,7 @@
                     else if (type === 'mp') loadMPExpenses();
                     
                     updateBillsSummary();
+                    loadLoansDetailed();
                 })
                 .catch((error) => {
                     console.error('Erro ao excluir gasto:', error);
@@ -1112,30 +1267,63 @@
                 else if (type === 'mp') loadMPExpenses();
                 
                 updateBillsSummary();
+                loadLoansDetailed();
             })
             .catch((error) => {
                 console.error('Erro ao atualizar gasto:', error);
             });
     });
 
+    // Check for duplicates
+    function checkDuplicate(cardType, date, name, value) {
+        return new Promise((resolve) => {
+            database.ref(`users/${currentUser.uid}/${cardType}Expenses`).once('value')
+                .then((snapshot) => {
+                    let duplicateFound = false;
+                    
+                    snapshot.forEach((childSnapshot) => {
+                        const expense = childSnapshot.val();
+                        
+                        if (expense.date === date && 
+                            expense.name.trim().toLowerCase() === name.toLowerCase() && 
+                            Math.abs(expense.value - value) < 0.01) {
+                            duplicateFound = true;
+                            return true; // break the loop
+                        }
+                    });
+                    
+                    resolve(duplicateFound);
+                });
+        });
+    }
+
     // Fixed Expenses
     document.getElementById('fixed-expense-form').addEventListener('submit', (e) => {
         e.preventDefault();
+        
+        const activeType = document.querySelector('.fixed-type-btn.active').dataset.type;
         const name = document.getElementById('fixed-name').value;
         const value = parseFloat(document.getElementById('fixed-value').value);
         const dueDay = parseInt(document.getElementById('fixed-due-day').value);
-        const installments = parseInt(document.getElementById('fixed-installments').value) || 1;
-        const currentInstallment = parseInt(document.getElementById('fixed-current-installment').value) || 1;
         
-        const expense = {
+        let expense = {
             name,
             value,
             dueDay,
-            installments,
-            currentInstallment,
-            isInstallment: installments > 1,
+            type: activeType,
             createdAt: new Date().toISOString()
         };
+        
+        if (activeType === 'installment') {
+            expense.installments = parseInt(document.getElementById('fixed-total-installments').value);
+            expense.currentInstallment = parseInt(document.getElementById('fixed-start-installment').value);
+            expense.purchaseDate = document.getElementById('fixed-purchase-date').value;
+            expense.isInstallment = true;
+        } else {
+            expense.installments = 1;
+            expense.currentInstallment = 1;
+            expense.isInstallment = false;
+        }
         
         const newExpenseRef = database.ref(`users/${currentUser.uid}/fixedExpenses`).push();
         newExpenseRef.set(expense)
@@ -1171,11 +1359,20 @@
                     installmentsText = `${expense.currentInstallment || 1}/${expense.installments}`;
                 }
                 
+                let typeText = '';
+                switch(expense.type) {
+                    case 'fixed': typeText = 'Fixo'; break;
+                    case 'variable': typeText = 'Variável'; break;
+                    case 'installment': typeText = 'Parcelado'; break;
+                    default: typeText = 'Fixo';
+                }
+                
                 row.innerHTML = `
                     <td>${expense.name}</td>
                     <td>${formatCurrency(expense.value)}</td>
                     <td>Dia ${expense.dueDay}</td>
                     <td>${installmentsText || '-'}</td>
+                    <td>${typeText}</td>
                     <td>
                         <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${expense.key}" data-type="fixed">
                             <i class="fas fa-edit"></i>
@@ -1193,7 +1390,7 @@
     }
 
     // Sicredi Expenses
-    document.getElementById('sicredi-expense-form').addEventListener('submit', (e) => {
+    document.getElementById('sicredi-expense-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const date = document.getElementById('sicredi-date').value;
         const name = document.getElementById('sicredi-name').value;
@@ -1213,6 +1410,9 @@
             createdAt: new Date().toISOString()
         };
         
+        // Check for duplicates
+        const isDuplicate = await checkDuplicate('sicredi', date, name, value);
+        
         const newExpenseRef = database.ref(`users/${currentUser.uid}/sicrediExpenses`).push();
         newExpenseRef.set(expense)
             .then(() => {
@@ -1220,6 +1420,11 @@
                 document.getElementById('sicredi-value').value = '';
                 loadSicrediExpenses();
                 updateBillsSummary();
+                loadLoansDetailed();
+                
+                if (isDuplicate) {
+                    alert('ATENÇÃO: Foi detectada uma possível compra duplicada! Verifique se deseja realmente adicionar esta compra.');
+                }
             })
             .catch((error) => {
                 console.error('Erro ao salvar gasto Sicredi:', error);
@@ -1227,7 +1432,7 @@
     });
 
     function loadSicrediExpenses() {
-        database.ref(`users/${currentUser.uid}/sicrediExpenses`).on('value', (snapshot) => {
+        database.ref(`users/${currentUser.uid}/sicrediExpenses`).on('value', async (snapshot) => {
             const expensesList = document.getElementById('sicredi-expenses-list');
             expensesList.innerHTML = '';
             
@@ -1241,11 +1446,18 @@
             // Sort by date (most recent first)
             expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
             
-            expenses.forEach((expense) => {
+            for (const expense of expenses) {
                 const row = document.createElement('tr');
+                
+                // Check for duplicates
+                const isDuplicate = await checkDuplicate('sicredi', expense.date, expense.name, expense.value);
+                
                 row.innerHTML = `
                     <td>${fixLocalDate(expense.date).toLocaleDateString()}</td>
-                    <td>${expense.name}</td>
+                    <td>
+                        ${expense.name}
+                        ${isDuplicate ? '<span class="duplicate-tag" onclick="removeDuplicateTag(this)">verificar duplicidade</span>' : ''}
+                    </td>
                     <td>${formatCurrency(expense.value)}</td>
                     <td>${expense.installments}</td>
                     <td>${expense.observation || '-'}</td>
@@ -1259,14 +1471,14 @@
                     </td>
                 `;
                 expensesList.appendChild(row);
-            });
+            }
             
             addEditDeleteListeners();
         });
     }
 
     // Porto Expenses
-    document.getElementById('porto-expense-form').addEventListener('submit', (e) => {
+    document.getElementById('porto-expense-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const date = document.getElementById('porto-date').value;
         const name = document.getElementById('porto-name').value;
@@ -1286,6 +1498,9 @@
             createdAt: new Date().toISOString()
         };
         
+        // Check for duplicates
+        const isDuplicate = await checkDuplicate('porto', date, name, value);
+        
         const newExpenseRef = database.ref(`users/${currentUser.uid}/portoExpenses`).push();
         newExpenseRef.set(expense)
             .then(() => {
@@ -1293,6 +1508,11 @@
                 document.getElementById('porto-value').value = '';
                 loadPortoExpenses();
                 updateBillsSummary();
+                loadLoansDetailed();
+                
+                if (isDuplicate) {
+                    alert('ATENÇÃO: Foi detectada uma possível compra duplicada! Verifique se deseja realmente adicionar esta compra.');
+                }
             })
             .catch((error) => {
                 console.error('Erro ao salvar gasto Porto:', error);
@@ -1300,7 +1520,7 @@
     });
 
     function loadPortoExpenses() {
-        database.ref(`users/${currentUser.uid}/portoExpenses`).on('value', (snapshot) => {
+        database.ref(`users/${currentUser.uid}/portoExpenses`).on('value', async (snapshot) => {
             const expensesList = document.getElementById('porto-expenses-list');
             expensesList.innerHTML = '';
             
@@ -1314,11 +1534,18 @@
             // Sort by date (most recent first)
             expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
             
-            expenses.forEach((expense) => {
+            for (const expense of expenses) {
                 const row = document.createElement('tr');
+                
+                // Check for duplicates
+                const isDuplicate = await checkDuplicate('porto', expense.date, expense.name, expense.value);
+                
                 row.innerHTML = `
                     <td>${fixLocalDate(expense.date).toLocaleDateString()}</td>
-                    <td>${expense.name}</td>
+                    <td>
+                        ${expense.name}
+                        ${isDuplicate ? '<span class="duplicate-tag" onclick="removeDuplicateTag(this)">verificar duplicidade</span>' : ''}
+                    </td>
                     <td>${formatCurrency(expense.value)}</td>
                     <td>${expense.installments}</td>
                     <td>${expense.observation || '-'}</td>
@@ -1332,14 +1559,14 @@
                     </td>
                 `;
                 expensesList.appendChild(row);
-            });
+            }
             
             addEditDeleteListeners();
         });
     }
 
     // Mercado Pago Expenses
-    document.getElementById('mp-expense-form').addEventListener('submit', (e) => {
+    document.getElementById('mp-expense-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const date = document.getElementById('mp-date').value;
         const name = document.getElementById('mp-name').value;
@@ -1359,6 +1586,9 @@
             createdAt: new Date().toISOString()
         };
         
+        // Check for duplicates
+        const isDuplicate = await checkDuplicate('mp', date, name, value);
+        
         const newExpenseRef = database.ref(`users/${currentUser.uid}/mpExpenses`).push();
         newExpenseRef.set(expense)
             .then(() => {
@@ -1366,6 +1596,11 @@
                 document.getElementById('mp-value').value = '';
                 loadMPExpenses();
                 updateBillsSummary();
+                loadLoansDetailed();
+                
+                if (isDuplicate) {
+                    alert('ATENÇÃO: Foi detectada uma possível compra duplicada! Verifique se deseja realmente adicionar esta compra.');
+                }
             })
             .catch((error) => {
                 console.error('Erro ao salvar gasto Mercado Pago:', error);
@@ -1373,7 +1608,7 @@
     });
 
     function loadMPExpenses() {
-        database.ref(`users/${currentUser.uid}/mpExpenses`).on('value', (snapshot) => {
+        database.ref(`users/${currentUser.uid}/mpExpenses`).on('value', async (snapshot) => {
             const expensesList = document.getElementById('mp-expenses-list');
             expensesList.innerHTML = '';
             
@@ -1387,11 +1622,18 @@
             // Sort by date (most recent first)
             expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
             
-            expenses.forEach((expense) => {
+            for (const expense of expenses) {
                 const row = document.createElement('tr');
+                
+                // Check for duplicates
+                const isDuplicate = await checkDuplicate('mp', expense.date, expense.name, expense.value);
+                
                 row.innerHTML = `
                     <td>${fixLocalDate(expense.date).toLocaleDateString()}</td>
-                    <td>${expense.name}</td>
+                    <td>
+                        ${expense.name}
+                        ${isDuplicate ? '<span class="duplicate-tag" onclick="removeDuplicateTag(this)">verificar duplicidade</span>' : ''}
+                    </td>
                     <td>${formatCurrency(expense.value)}</td>
                     <td>${expense.installments}</td>
                     <td>${expense.observation || '-'}</td>
@@ -1405,11 +1647,16 @@
                     </td>
                 `;
                 expensesList.appendChild(row);
-            });
+            }
             
             addEditDeleteListeners();
         });
     }
+
+    // Remove duplicate tag
+    window.removeDuplicateTag = function(element) {
+        element.remove();
+    };
 
     // ========== FUNÇÕES DE UPLOAD ==========
 
@@ -1718,6 +1965,7 @@
             // Recarregar a lista de gastos
             loadSicrediExpenses();
             updateBillsSummary();
+            loadLoansDetailed();
             
             // Limpar o input
             fileInput.value = '';
@@ -1774,6 +2022,7 @@
             // Recarregar a lista de gastos
             loadPortoExpenses();
             updateBillsSummary();
+            loadLoansDetailed();
             
             // Limpar o input
             fileInput.value = '';
@@ -1822,7 +2071,7 @@
                     if (expense.installments && expense.installments > 1) {
                         // Para gastos fixos parcelados, calcula a parcela atual baseada no mês selecionado
                         // Usa a data de criação como referência
-                        const createdAt = new Date(expense.createdAt);
+                        const createdAt = expense.purchaseDate ? new Date(expense.purchaseDate) : new Date(expense.createdAt);
                         const createdMonth = createdAt.getMonth() + 1;
                         const createdYear = createdAt.getFullYear();
                         
@@ -1830,23 +2079,16 @@
                         const monthDiff = (year - createdYear) * 12 + (month - createdMonth);
                         
                         if (monthDiff >= 0 && monthDiff < expense.installments) {
-                            const currentInstallment = monthDiff + 1;
+                            const currentInstallment = monthDiff + (expense.currentInstallment || 1);
                             installmentText = ` <span class="installment-badge">${currentInstallment}/${expense.installments}</span>`;
-                            
-                            // Atualiza a parcela atual no banco de dados se for diferente
-                            if (expense.currentInstallment !== currentInstallment) {
-                                database.ref(`users/${currentUser.uid}/fixedExpenses/${key}/currentInstallment`).set(currentInstallment);
-                            }
                         } else {
                             shouldDisplay = false;
                         }
                     }
                     
-                    if (shouldDisplay && !paid) {
-                        totalFixed += expense.value;
-                    }
-                    
                     if (shouldDisplay) {
+                        totalFixed += expense.value; // Sempre soma o valor, independente de estar pago
+                        
                         fixedHtml += `
                             <div class="expense-item d-flex justify-content-between align-items-center ${paid ? 'paid' : ''}">
                                 <div>
@@ -1889,9 +2131,7 @@
                     installmentsThisMonth.forEach((installment) => {
                         const paid = expense.paidInstallments && expense.paidInstallments[`${year}-${month}-${installment.installment}`];
                         
-                        if (!paid) {
-                            totalCard += installment.value;
-                        }
+                        totalCard += installment.value; // Sempre soma o valor, independente de estar pago
                         
                         // Show purchase date instead of due date
                         const purchaseDate = fixLocalDate(expense.date).toLocaleDateString();
@@ -1920,7 +2160,7 @@
                 
                 summaryData[cardType] = totalCard;
                 updateGeneralTotals();
-                updateLoansSummary(month, year);
+                loadLoansDetailed(); // Atualiza empréstimos quando os cartões são carregados
             });
     }
 
@@ -1953,22 +2193,12 @@
         document.getElementById('total-expenses').textContent = formatCurrency(totalExpenses);
         document.getElementById('total-loans').textContent = formatCurrency(totalLoans);
         document.getElementById('real-expenses').textContent = formatCurrency(realExpenses);
-        
-        // Update status
-        const statusElement = document.getElementById('payment-status');
-        if (totalExpenses === 0) {
-            statusElement.textContent = 'Sem gastos';
-            statusElement.className = 'badge bg-secondary';
-        } else if (realExpenses === 0) {
-            statusElement.textContent = 'Todos pagos';
-            statusElement.className = 'badge bg-success';
-        } else {
-            statusElement.textContent = 'Pendentes';
-            statusElement.className = 'badge bg-warning';
-        }
     }
 
-    function updateLoansSummary(month, year) {
+    // Load loans detailed view
+    function loadLoansDetailed() {
+        const month = currentMonth;
+        const year = currentYear;
         const loans = {};
         
         // Process all card types for loans
@@ -1984,12 +2214,23 @@
                             installmentsThisMonth.forEach(installment => {
                                 const paid = expense.paidInstallments && expense.paidInstallments[`${year}-${month}-${installment.installment}`];
                                 
-                                if (!paid) {
-                                    if (!loans[expense.observation]) {
-                                        loans[expense.observation] = 0;
-                                    }
-                                    loans[expense.observation] += installment.value;
+                                if (!loans[expense.observation]) {
+                                    loans[expense.observation] = {
+                                        total: 0,
+                                        details: []
+                                    };
                                 }
+                                
+                                loans[expense.observation].total += installment.value;
+                                loans[expense.observation].details.push({
+                                    cardType: cardType,
+                                    date: expense.date,
+                                    name: expense.name,
+                                    value: installment.value,
+                                    paid: paid,
+                                    installment: installment.installment,
+                                    totalInstallments: expense.installments
+                                });
                             });
                         }
                     });
@@ -2001,23 +2242,63 @@
             let totalLoans = 0;
             let loansHtml = '';
             
-            for (const [person, amount] of Object.entries(loans)) {
-                if (amount > 0) {
-                    totalLoans += amount;
-                    loansHtml += `
-                        <div class="loan-item d-flex justify-content-between align-items-center">
-                            <span>${person}</span>
-                            <span class="fw-bold">${formatCurrency(amount)}</span>
+            for (const [person, data] of Object.entries(loans)) {
+                totalLoans += data.total;
+                loansHtml += `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">${person}</h6>
+                                <span class="fw-bold">${formatCurrency(data.total)}</span>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary mt-2" onclick="showLoanDetails('${person}', ${JSON.stringify(data.details).replace(/"/g, '&quot;')})">
+                                Ver detalhes
+                            </button>
                         </div>
-                    `;
-                }
+                    </div>
+                `;
             }
             
-            document.getElementById('loans-summary').innerHTML = loansHtml || '<p class="text-muted">Nenhum empréstimo</p>';
+            document.getElementById('loans-detailed-list').innerHTML = loansHtml || '<p class="text-muted">Nenhum empréstimo para este mês</p>';
             summaryData.loans = totalLoans;
             updateGeneralTotals();
         });
     }
+
+    // Show loan details modal
+    window.showLoanDetails = function(person, details) {
+        const modal = new bootstrap.Modal(document.getElementById('loanDetailsModal'));
+        document.getElementById('loanDetailsTitle').textContent = `Detalhes do empréstimo - ${person}`;
+        
+        let detailsHtml = '';
+        details.forEach(detail => {
+            const cardTypeNames = {
+                'sicredi': 'Sicredi',
+                'porto': 'Porto',
+                'mp': 'Mercado Pago'
+            };
+            
+            detailsHtml += `
+                <div class="loan-detail-item">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <strong>${detail.name}</strong><br>
+                            <small>Cartão: ${cardTypeNames[detail.cardType]}</small><br>
+                            <small>Data da compra: ${fixLocalDate(detail.date).toLocaleDateString()}</small><br>
+                            <small>Parcela: ${detail.installment}/${detail.totalInstallments}</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="fw-bold">${formatCurrency(detail.value)}</span><br>
+                            ${detail.paid ? '<span class="badge bg-success">Pago</span>' : '<span class="badge bg-warning">Pendente</span>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        document.getElementById('loanDetailsBody').innerHTML = detailsHtml;
+        modal.show();
+    };
 
     // Payment toggle functions
     window.toggleFixedPayment = function(expenseKey, month, year) {
@@ -2027,6 +2308,7 @@
             const isPaid = snapshot.val();
             paidRef.set(!isPaid).then(() => {
                 updateBillsSummary();
+                loadLoansDetailed();
             });
         });
     };
@@ -2038,6 +2320,7 @@
             const isPaid = snapshot.val();
             paidRef.set(!isPaid).then(() => {
                 updateBillsSummary();
+                loadLoansDetailed();
             });
         });
     };
@@ -2049,6 +2332,7 @@
         document.getElementById('sicredi-date').value = today;
         document.getElementById('porto-date').value = today;
         document.getElementById('mp-date').value = today;
+        document.getElementById('fixed-purchase-date').value = today;
         
         // Setup currency inputs
         setupCurrencyInputs();
