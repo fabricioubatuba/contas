@@ -1068,10 +1068,26 @@
     });
     
     // Date utility functions
-    function fixLocalDate(dateStr) {
-        const [year, month, day] = dateStr.split('-').map(Number);
-        return new Date(year, month - 1, day);
+function fixLocalDate(dateStr) {
+    // Verifica se a data existe e é uma string
+    if (!dateStr || typeof dateStr !== 'string') {
+        return new Date(); // Retorna data atual como fallback
     }
+    
+    // Verifica se está no formato YYYY-MM-DD
+    if (!dateStr.includes('-')) {
+        return new Date(); // Retorna data atual se não estiver no formato esperado
+    }
+    
+    const [year, month, day] = dateStr.split('-').map(Number);
+    
+    // Verifica se os valores são números válidos
+    if (isNaN(year) || isNaN(month) || isNaN(day)) {
+        return new Date(); // Retorna data atual se algum valor for inválido
+    }
+    
+    return new Date(year, month - 1, day);
+}
 
     function initializeDateSelectors() {
         const monthSelector = document.getElementById('month-selector');
@@ -1134,48 +1150,59 @@
         });
     }
 
-    function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
-        const dueDates = [];
-        const purchase = fixLocalDate(purchaseDate);
-        const purchaseDay = purchase.getDate();
-        
-        let dueDay;
-        switch(cardType) {
-            case 'sicredi': dueDay = 20; break;
-            case 'porto': dueDay = 15; break;
-            case 'mp': dueDay = 10; break;
-            default: dueDay = 1;
-        }
-        
-        let firstDueDate = new Date(purchase);
-        firstDueDate.setDate(dueDay);
-        
-        if (purchaseDay > closingDay) {
-            firstDueDate.setMonth(firstDueDate.getMonth() + 1);
-        }
-        
-        for (let i = 0; i < installments; i++) {
-            const dueDate = new Date(firstDueDate);
-            dueDate.setMonth(firstDueDate.getMonth() + i);
-            
-            dueDates.push({
-                date: dueDate.toISOString().split('T')[0],
-                month: dueDate.getMonth() + 1,
-                year: dueDate.getFullYear(),
-                installment: i + 1
-            });
-        }
-        
-        return dueDates;
-    }
-
-    function isExpenseFinished(expense, cardType) {
+function calculateDueDates(purchaseDate, closingDay, cardType, installments) {
+    const dueDates = [];
+    
+    // Verifica se a data de compra existe e é válida
+    if (!purchaseDate) {
+        // Se não tiver data, usa a data atual
         const today = new Date();
-        const currentYear = today.getFullYear();
-        const currentMonth = today.getMonth() + 1;
+        const defaultDate = today.toISOString().split('T')[0];
+        purchaseDate = defaultDate;
+    }
+    
+    const purchase = fixLocalDate(purchaseDate);
+    const purchaseDay = purchase.getDate();
+    
+    let dueDay;
+    switch(cardType) {
+        case 'sicredi': dueDay = 20; break;
+        case 'porto': dueDay = 15; break;
+        case 'mp': dueDay = 10; break;
+        default: dueDay = 1;
+    }
+    
+    let firstDueDate = new Date(purchase);
+    firstDueDate.setDate(dueDay);
+    
+    if (purchaseDay > closingDay) {
+        firstDueDate.setMonth(firstDueDate.getMonth() + 1);
+    }
+    
+    for (let i = 0; i < installments; i++) {
+        const dueDate = new Date(firstDueDate);
+        dueDate.setMonth(firstDueDate.getMonth() + i);
         
-        if (cardType === 'fixed') {
-            if (expense.installments && expense.installments > 1) {
+        dueDates.push({
+            date: dueDate.toISOString().split('T')[0],
+            month: dueDate.getMonth() + 1,
+            year: dueDate.getFullYear(),
+            installment: i + 1
+        });
+    }
+    
+    return dueDates;
+}
+
+function isExpenseFinished(expense, cardType) {
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1;
+    
+    if (cardType === 'fixed') {
+        // Para gastos fixos, verifica se é parcelado
+        if (expense.installments && expense.installments > 1 && expense.purchaseDate) {
+            try {
                 const dueDates = calculateDueDates(expense.purchaseDate, 1, 'fixed', expense.installments);
                 const lastDueDate = dueDates[dueDates.length - 1];
                 
@@ -1183,30 +1210,48 @@
                     (lastDueDate.year === currentYear && lastDueDate.month < currentMonth)) {
                     return true;
                 }
-            } else if (expense.installments === 1 || !expense.installments) {
-                if (expense.paidMonths && expense.paidMonths[`${currentYear}-${currentMonth}`]) {
-                    return true;
-                }
+            } catch (e) {
+                // Se houver erro no cálculo, retorna false
+                return false;
             }
-        } else {
-            const dueDates = calculateDueDates(expense.date, expense.closingDay, cardType, expense.installments);
-            const lastDueDate = dueDates[dueDates.length - 1];
-            
-            if (lastDueDate.year < currentYear || 
-                (lastDueDate.year === currentYear && lastDueDate.month < currentMonth)) {
+        } else if (expense.installments === 1 || !expense.installments) {
+            // Pagamento único - verifica se foi pago
+            if (expense.paidMonths && expense.paidMonths[`${currentYear}-${currentMonth}`]) {
                 return true;
             }
         }
-        
-        return false;
+    } else {
+        // Para cartões de crédito - verifica se tem data
+        if (expense.date) {
+            try {
+                const dueDates = calculateDueDates(expense.date, expense.closingDay, cardType, expense.installments);
+                const lastDueDate = dueDates[dueDates.length - 1];
+                
+                if (lastDueDate.year < currentYear || 
+                    (lastDueDate.year === currentYear && lastDueDate.month < currentMonth)) {
+                    return true;
+                }
+            } catch (e) {
+                // Se houver erro no cálculo, retorna false
+                return false;
+            }
+        }
     }
+    
+    return false;
+}
 
-    function getFinishedStatus(expense, cardType) {
+function getFinishedStatus(expense, cardType) {
+    try {
         if (isExpenseFinished(expense, cardType)) {
             return '<span class="finished-badge" title="Esta compra já deveria estar quitada">Finalizada?</span>';
         }
-        return '';
+    } catch (e) {
+        // Se houver erro, não exibe o badge
+        console.warn('Erro ao verificar status finalizado:', e);
     }
+    return '';
+}
 
     window.toggleHideExpense = function(cardType, expenseKey) {
         database.ref(`users/${currentUser.uid}/${cardType}Expenses/${expenseKey}`).once('value')
@@ -1484,54 +1529,62 @@
             
             expenses.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
             
-            expenses.forEach((expense) => {
-                if (expense.hidden && !showHidden.fixed) return;
-                
-                const row = document.createElement('tr');
-                if (expense.hidden) {
-                    row.classList.add('hidden-expense');
-                    if (showHidden.fixed) row.classList.remove('hidden-expense');
-                }
-                
-                let installmentsText = '';
-                if (expense.installments && expense.installments > 1) {
-                    installmentsText = `${expense.currentInstallment || 1}/${expense.installments}`;
-                }
-                
-                let typeText = '';
-                switch(expense.type) {
-                    case 'fixed': typeText = 'Fixo'; break;
-                    case 'variable': typeText = 'Variável'; break;
-                    case 'installment': typeText = 'Parcelado'; break;
-                    default: typeText = 'Fixo';
-                }
-                
-                const finishedStatus = getFinishedStatus(expense, 'fixed');
-                
-                row.innerHTML = `
-                    <td>${expense.name}</td>
-                    <td>${formatCurrency(expense.value)}</td>
-                    <td>Dia ${expense.dueDay}</td>
-                    <td>${installmentsText || '-'}</td>
-                    <td>${typeText}</td>
-                    <td>
-                        ${finishedStatus}
-                        ${expense.hidden ? '<span class="badge bg-secondary ms-1">Oculto</span>' : ''}
-                    </td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${expense.key}" data-type="fixed">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn btn-sm btn-outline-warning hide-btn" data-id="${expense.key}" data-card-type="fixed">
-                            <i class="fas ${expense.hidden ? 'fa-eye' : 'fa-eye-slash'}"></i>
-                        </button>
-                        <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${expense.key}" data-type="fixed">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                `;
-                expensesList.appendChild(row);
-            });
+expenses.forEach((expense) => {
+    // Pula se estiver oculto e não estiver mostrando ocultos
+    if (expense.hidden && !showHidden.fixed) return;
+    
+    const row = document.createElement('tr');
+    if (expense.hidden) {
+        row.classList.add('hidden-expense');
+        if (showHidden.fixed) row.classList.remove('hidden-expense');
+    }
+    
+    let installmentsText = '';
+    if (expense.installments && expense.installments > 1) {
+        installmentsText = `${expense.currentInstallment || 1}/${expense.installments}`;
+    }
+    
+    let typeText = '';
+    switch(expense.type) {
+        case 'fixed': typeText = 'Fixo'; break;
+        case 'variable': typeText = 'Variável'; break;
+        case 'installment': typeText = 'Parcelado'; break;
+        default: typeText = 'Fixo';
+    }
+    
+    // Tenta obter o status finalizado, com fallback caso haja erro
+    let finishedStatus = '';
+    try {
+        finishedStatus = getFinishedStatus(expense, 'fixed');
+    } catch (e) {
+        // Se houver erro, não exibe o badge
+        finishedStatus = '';
+    }
+    
+    row.innerHTML = `
+        <td>${expense.name || 'Sem nome'}</td>
+        <td>${formatCurrency(expense.value || 0)}</td>
+        <td>Dia ${expense.dueDay || '?'}</td>
+        <td>${installmentsText || '-'}</td>
+        <td>${typeText}</td>
+        <td>
+            ${finishedStatus}
+            ${expense.hidden ? '<span class="badge bg-secondary ms-1">Oculto</span>' : ''}
+        </td>
+        <td>
+            <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${expense.key}" data-type="fixed">
+                <i class="fas fa-edit"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-warning hide-btn" data-id="${expense.key}" data-card-type="fixed">
+                <i class="fas ${expense.hidden ? 'fa-eye' : 'fa-eye-slash'}"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${expense.key}" data-type="fixed">
+                <i class="fas fa-trash"></i>
+            </button>
+        </td>
+    `;
+    expensesList.appendChild(row);
+});
             
             addEditDeleteListeners();
         });
@@ -1965,318 +2018,395 @@
         document.getElementById('real-expenses').textContent = formatCurrency(realExpenses);
     }
 
-    // Load loans detailed view
-    function loadLoansDetailed() {
-        const month = loanMonth;
-        const year = loanYear;
-        const loans = {};
-        
-        const promises = ['sicredi', 'porto', 'mp'].map(cardType => {
-            return database.ref(`users/${currentUser.uid}/${cardType}Expenses`).once('value')
-                .then((snapshot) => {
-                    snapshot.forEach((childSnapshot) => {
-                        const expense = childSnapshot.val();
-                        const expenseKey = childSnapshot.key;
-                        
-                        if (expense.hidden) return;
-                        
-                        if (expense.observation) {
-                            for (let i = 1; i <= expense.installments; i++) {
-                                const dueDates = calculateDueDates(expense.date, expense.closingDay, cardType, expense.installments);
-                                const dueDate = dueDates[i - 1];
+// Load loans detailed view - VERSÃO COMPLETA ATUALIZADA
+function loadLoansDetailed() {
+    const month = loanMonth;
+    const year = loanYear;
+    const loans = {};
+    
+    const promises = ['sicredi', 'porto', 'mp'].map(cardType => {
+        return database.ref(`users/${currentUser.uid}/${cardType}Expenses`).once('value')
+            .then((snapshot) => {
+                snapshot.forEach((childSnapshot) => {
+                    const expense = childSnapshot.val();
+                    const expenseKey = childSnapshot.key;
+                    
+                    if (expense.hidden) return;
+                    
+                    if (expense.observation) {
+                        for (let i = 1; i <= expense.installments; i++) {
+                            const dueDates = calculateDueDates(expense.date, expense.closingDay, cardType, expense.installments);
+                            const dueDate = dueDates[i - 1];
+                            
+                            if (dueDate) {
+                                const parcelMonth = dueDate.month;
+                                const parcelYear = dueDate.year;
                                 
-                                if (dueDate) {
-                                    const parcelMonth = dueDate.month;
-                                    const parcelYear = dueDate.year;
+                                const isSelectedMonth = (parcelYear === year && parcelMonth === month);
+                                const isPreviousMonth = (parcelYear === year && parcelMonth < month) || (parcelYear < year);
+                                
+                                if (isSelectedMonth || isPreviousMonth) {
+                                    const paid = expense.paidInstallments && expense.paidInstallments[`${parcelYear}-${parcelMonth}-${i}`];
+                                    const paymentDate = expense.paymentDates && expense.paymentDates[`${parcelYear}-${parcelMonth}-${i}`];
                                     
-                                    const isCurrentMonth = (parcelYear === year && parcelMonth === month);
+                                    if (!loans[expense.observation]) {
+                                        loans[expense.observation] = {
+                                            total: 0,
+                                            details: [],
+                                            amortizations: expense.amortizations || [],
+                                            hasPreviousMonths: false,
+                                            expenseKeys: []
+                                        };
+                                    }
                                     
-                                    if (isCurrentMonth) {
-                                        const paid = expense.paidInstallments && expense.paidInstallments[`${parcelYear}-${parcelMonth}-${i}`];
-                                        const paymentDate = expense.paymentDates && expense.paymentDates[`${parcelYear}-${parcelMonth}-${i}`];
-                                        
-                                        if (!loans[expense.observation]) {
-                                            loans[expense.observation] = {
-                                                total: 0,
-                                                details: [],
-                                                amortizations: expense.amortizations || []
-                                            };
+                                    let paymentDateFormatted = '';
+                                    if (paymentDate) {
+                                        const date = new Date(paymentDate);
+                                        paymentDateFormatted = date.toLocaleDateString('pt-BR');
+                                    }
+                                    
+                                    let amortizedAmount = 0;
+                                    if (expense.amortizations) {
+                                        const amortKey = `${parcelYear}-${parcelMonth}-${i}`;
+                                        const amort = expense.amortizations[amortKey];
+                                        if (amort) {
+                                            amortizedAmount = amort.amount || 0;
                                         }
-                                        
-                                        let paymentDateFormatted = '';
-                                        if (paymentDate) {
-                                            const date = new Date(paymentDate);
-                                            paymentDateFormatted = date.toLocaleDateString('pt-BR');
-                                        }
-                                        
-                                        // Verificar se houve amortização nesta parcela
-                                        let amortizedAmount = 0;
-                                        if (expense.amortizations) {
-                                            const amortKey = `${parcelYear}-${parcelMonth}-${i}`;
-                                            const amort = expense.amortizations[amortKey];
-                                            if (amort) {
-                                                amortizedAmount = amort.amount || 0;
-                                            }
-                                        }
-                                        
-                                        loans[expense.observation].details.push({
-                                            cardType: cardType,
-                                            expenseKey: expenseKey,
-                                            date: expense.date,
-                                            name: expense.name,
-                                            originalValue: expense.value,
-                                            value: expense.value - amortizedAmount,
-                                            amortizedAmount: amortizedAmount,
-                                            paid: paid || false,
-                                            paymentDate: paymentDateFormatted,
-                                            installment: i,
-                                            totalInstallments: expense.installments,
-                                            dueMonth: parcelMonth,
-                                            dueYear: parcelYear,
-                                            dueDay: dueDate.date.split('-')[2],
-                                            status: paid ? `Pago em ${paymentDateFormatted}` : (parcelYear === year && parcelMonth === month ? 'Pendente (mês atual)' : 'Atrasado')
-                                        });
-                                        
-                                        // Always sum to total (whether paid or not)
-                                        loans[expense.observation].total += expense.value - amortizedAmount;
+                                    }
+                                    
+                                    const currentValue = expense.value - amortizedAmount;
+                                    const isFullyAmortized = currentValue <= 0;
+                                    
+                                    // Se estiver 100% amortizada, considerar como paga
+                                    const isPaid = paid || isFullyAmortized;
+                                    
+                                    let status = '';
+                                    if (isPaid) {
+                                        status = isFullyAmortized ? 'Pago (100% amortizado)' : `Pago em ${paymentDateFormatted}`;
+                                    } else if (isSelectedMonth) {
+                                        status = 'Pendente (mês atual)';
+                                    } else if (isPreviousMonth) {
+                                        status = 'Atrasado';
+                                        loans[expense.observation].hasPreviousMonths = true;
+                                    }
+                                    
+                                    loans[expense.observation].details.push({
+                                        cardType: cardType,
+                                        expenseKey: expenseKey,
+                                        date: expense.date,
+                                        name: expense.name,
+                                        originalValue: expense.value,
+                                        value: currentValue,
+                                        amortizedAmount: amortizedAmount,
+                                        paid: isPaid,
+                                        isFullyAmortized: isFullyAmortized,
+                                        paymentDate: paymentDateFormatted,
+                                        installment: i,
+                                        totalInstallments: expense.installments,
+                                        dueMonth: parcelMonth,
+                                        dueYear: parcelYear,
+                                        dueDay: dueDate.date.split('-')[2],
+                                        status: status,
+                                        isPreviousMonth: isPreviousMonth,
+                                        isSelectedMonth: isSelectedMonth
+                                    });
+                                    
+                                    if (isSelectedMonth) {
+                                        loans[expense.observation].total += currentValue;
                                     }
                                 }
                             }
                         }
-                    });
+                    }
                 });
-        });
-        
-        // Also check fixed expenses for loans
-        promises.push(
-            database.ref(`users/${currentUser.uid}/fixedExpenses`).once('value')
-                .then((snapshot) => {
-                    snapshot.forEach((childSnapshot) => {
-                        const expense = childSnapshot.val();
-                        const expenseKey = childSnapshot.key;
+            });
+    });
+    
+    // Also check fixed expenses for loans
+    promises.push(
+        database.ref(`users/${currentUser.uid}/fixedExpenses`).once('value')
+            .then((snapshot) => {
+                snapshot.forEach((childSnapshot) => {
+                    const expense = childSnapshot.val();
+                    const expenseKey = childSnapshot.key;
+                    
+                    if (expense.hidden) return;
+                    
+                    if (expense.observation) {
+                        const paid = expense.paidMonths && expense.paidMonths[`${year}-${month}`];
+                        const paymentDate = expense.paymentDates && expense.paymentDates[`${year}-${month}`];
                         
-                        if (expense.hidden) return;
+                        if (!loans[expense.observation]) {
+                            loans[expense.observation] = {
+                                total: 0,
+                                details: [],
+                                amortizations: expense.amortizations || [],
+                                hasPreviousMonths: false,
+                                expenseKeys: []
+                            };
+                        }
                         
-                        if (expense.observation) {
-                            const paid = expense.paidMonths && expense.paidMonths[`${year}-${month}`];
-                            const paymentDate = expense.paymentDates && expense.paymentDates[`${year}-${month}`];
-                            
-                            if (!loans[expense.observation]) {
-                                loans[expense.observation] = {
-                                    total: 0,
-                                    details: [],
-                                    amortizations: expense.amortizations || []
-                                };
+                        let paymentDateFormatted = '';
+                        if (paymentDate) {
+                            const date = new Date(paymentDate);
+                            paymentDateFormatted = date.toLocaleDateString('pt-BR');
+                        }
+                        
+                        let amortizedAmount = 0;
+                        if (expense.amortizations) {
+                            const amortKey = `${year}-${month}`;
+                            const amort = expense.amortizations[amortKey];
+                            if (amort) {
+                                amortizedAmount = amort.amount || 0;
                             }
-                            
-                            let paymentDateFormatted = '';
-                            if (paymentDate) {
-                                const date = new Date(paymentDate);
-                                paymentDateFormatted = date.toLocaleDateString('pt-BR');
-                            }
-                            
-                            // Verificar se houve amortização nesta parcela
-                            let amortizedAmount = 0;
-                            if (expense.amortizations) {
-                                const amortKey = `${year}-${month}`;
-                                const amort = expense.amortizations[amortKey];
-                                if (amort) {
-                                    amortizedAmount = amort.amount || 0;
+                        }
+                        
+                        const currentValue = expense.value - amortizedAmount;
+                        const isFullyAmortized = currentValue <= 0;
+                        const isPaid = paid || isFullyAmortized;
+                        
+                        let status = '';
+                        if (isPaid) {
+                            status = isFullyAmortized ? 'Pago (100% amortizado)' : `Pago em ${paymentDateFormatted}`;
+                        } else {
+                            status = 'Pendente (mês atual)';
+                        }
+                        
+                        // Verificar se tem parcelas anteriores em aberto
+                        if (!isPaid && expense.installments && expense.installments > 1) {
+                            let hasPrevious = false;
+                            for (let m = 1; m < month; m++) {
+                                const prevPaid = expense.paidMonths && expense.paidMonths[`${year}-${m}`];
+                                if (!prevPaid) {
+                                    hasPrevious = true;
+                                    break;
                                 }
                             }
-                            
-                            loans[expense.observation].details.push({
-                                cardType: 'fixed',
-                                expenseKey: expenseKey,
-                                date: new Date().toISOString().split('T')[0],
-                                name: expense.name,
-                                originalValue: expense.value,
-                                value: expense.value - amortizedAmount,
-                                amortizedAmount: amortizedAmount,
-                                paid: paid || false,
-                                paymentDate: paymentDateFormatted,
-                                installment: 1,
-                                totalInstallments: 1,
-                                dueMonth: month,
-                                dueYear: year,
-                                dueDay: expense.dueDay,
-                                status: paid ? `Pago em ${paymentDateFormatted}` : 'Pendente (mês atual)'
-                            });
-                            
-                            loans[expense.observation].total += expense.value - amortizedAmount;
+                            if (hasPrevious) {
+                                status = 'Atrasado (mês atual com parcelas anteriores em aberto)';
+                                loans[expense.observation].hasPreviousMonths = true;
+                            }
                         }
-                    });
-                })
-        );
+                        
+                        loans[expense.observation].details.push({
+                            cardType: 'fixed',
+                            expenseKey: expenseKey,
+                            date: new Date().toISOString().split('T')[0],
+                            name: expense.name,
+                            originalValue: expense.value,
+                            value: currentValue,
+                            amortizedAmount: amortizedAmount,
+                            paid: isPaid,
+                            isFullyAmortized: isFullyAmortized,
+                            paymentDate: paymentDateFormatted,
+                            installment: 1,
+                            totalInstallments: expense.installments || 1,
+                            dueMonth: month,
+                            dueYear: year,
+                            dueDay: expense.dueDay,
+                            status: status,
+                            isPreviousMonth: false,
+                            isSelectedMonth: true
+                        });
+                        
+                        loans[expense.observation].total += currentValue;
+                    }
+                });
+            })
+    );
+    
+    Promise.all(promises).then(() => {
+        let totalLoans = 0;
+        let loansHtml = '';
         
-        Promise.all(promises).then(() => {
-            let totalLoans = 0;
-            let loansHtml = '';
+        for (const [person, data] of Object.entries(loans)) {
+            totalLoans += data.total;
             
-            for (const [person, data] of Object.entries(loans)) {
-                totalLoans += data.total;
-                
-                const atrasadas = data.details.filter(d => d.status === 'Atrasado').length;
-                const atrasadoBadge = atrasadas > 0 ? 
-                    `<span class="badge bg-danger ms-2">${atrasadas} parcela(s) atrasada(s)</span>` : '';
-                
-                loansHtml += `
-                    <div class="card mb-3 loan-debtor-card">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center flex-wrap">
-                                <div>
-                                    <h6 class="mb-0">${person} ${atrasadoBadge}</h6>
-                                    <small class="text-muted">Total: ${formatCurrency(data.total)}</small>
-                                </div>
-                                <div>
-                                    <span class="fw-bold me-3">${formatCurrency(data.total)}</span>
-                                    <button class="btn btn-sm btn-success" onclick="openAmortizationModal('${person}')">
-                                        <i class="fas fa-hand-holding-usd me-1"></i>Amortizar
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-primary mt-2 mt-md-0" onclick='showLoanDetails("${person}", ${JSON.stringify(data.details).replace(/'/g, "\\'")})'>
-                                        Ver detalhes
-                                    </button>
-                                </div>
+            const atrasadas = data.details.filter(d => d.status === 'Atrasado').length;
+            const atrasadoBadge = atrasadas > 0 ? 
+                `<span class="badge bg-danger ms-2">${atrasadas} parcela(s) atrasada(s)</span>` : '';
+            
+            const previousAlert = data.hasPreviousMonths ? 
+                `<div class="alert alert-warning mt-2 mb-0 py-1 px-2" style="font-size: 0.85rem;">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    <strong>Atenção:</strong> Este devedor possui parcelas em aberto de meses anteriores ao selecionado!
+                </div>` : '';
+            
+            loansHtml += `
+                <div class="card mb-3 loan-debtor-card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap">
+                            <div>
+                                <h6 class="mb-0">${person} ${atrasadoBadge}</h6>
+                                <small class="text-muted">Total do mês: ${formatCurrency(data.total)}</small>
+                            </div>
+                            <div>
+                                <span class="fw-bold me-3">${formatCurrency(data.total)}</span>
+                                <button class="btn btn-sm btn-success" onclick="openAmortizationModal('${person}')">
+                                    <i class="fas fa-hand-holding-usd me-1"></i>Amortizar
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary mt-2 mt-md-0" onclick='showLoanDetails("${person}", ${JSON.stringify(data.details).replace(/'/g, "\\'")})'>
+                                    Ver detalhes
+                                </button>
                             </div>
                         </div>
+                        ${previousAlert}
                     </div>
-                `;
-            }
-            
-            document.getElementById('loans-detailed-list').innerHTML = loansHtml || '<p class="text-muted">Nenhum empréstimo pendente para este mês</p>';
-            summaryData.loans = totalLoans;
-            updateGeneralTotals();
-        });
-    }
+                </div>
+            `;
+        }
+        
+        document.getElementById('loans-detailed-list').innerHTML = loansHtml || '<p class="text-muted">Nenhum empréstimo pendente para este mês</p>';
+        summaryData.loans = totalLoans;
+        updateGeneralTotals();
+    });
+}
 
-    // Show loan details modal
-    window.showLoanDetails = function(person, details) {
-        const modal = new bootstrap.Modal(document.getElementById('loanDetailsModal'));
-        document.getElementById('loanDetailsTitle').textContent = `Detalhes do empréstimo - ${person}`;
-        
-        const totalDevido = details.reduce((sum, detail) => sum + detail.value, 0);
-        
-        let detailsHtml = `
-            <div class="alert alert-info mb-3">
-                <strong>Total: ${formatCurrency(totalDevido)}</strong>
+// Show loan details modal
+window.showLoanDetails = function(person, details) {
+    const modal = new bootstrap.Modal(document.getElementById('loanDetailsModal'));
+    document.getElementById('loanDetailsTitle').textContent = `Detalhes do empréstimo - ${person}`;
+    
+    const totalDevido = details.reduce((sum, detail) => sum + detail.value, 0);
+    const hasPrevious = details.some(d => d.isPreviousMonth === true && d.paid === false);
+    
+    let detailsHtml = `
+        <div class="alert alert-info mb-3">
+            <strong>Total do mês selecionado: ${formatCurrency(totalDevido)}</strong>
+        </div>
+    `;
+    
+    // Alerta de parcelas anteriores em aberto
+    if (hasPrevious) {
+        detailsHtml += `
+            <div class="alert alert-warning mb-3">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Atenção:</strong> Este devedor possui parcelas em aberto de meses anteriores ao selecionado!
+                <br><small>Estas parcelas estão marcadas como <span class="badge bg-danger">Atrasado</span> abaixo.</small>
             </div>
         `;
-        
-        const atrasados = details.filter(d => d.status === 'Atrasado');
-        const pendentesAtual = details.filter(d => d.status === 'Pendente (mês atual)');
-        const pagos = details.filter(d => d.status.includes('Pago em'));
-        
-        if (atrasados.length > 0) {
-            detailsHtml += '<h6 class="text-danger mb-2">Parcelas Atrasadas</h6>';
-            atrasados.forEach(detail => {
-                const cardTypeNames = {
-                    'sicredi': 'Sicredi',
-                    'porto': 'Porto',
-                    'mp': 'Mercado Pago',
-                    'fixed': 'Fixo'
-                };
-                
-                const dueDateFormatted = `${detail.dueDay}/${String(detail.dueMonth).padStart(2, '0')}/${detail.dueYear}`;
-                const amortizedInfo = detail.amortizedAmount > 0 ? `<br><small class="text-success">Amortizado: ${formatCurrency(detail.amortizedAmount)}</small>` : '';
-                
-                detailsHtml += `
-                    <div class="loan-detail-item border-start border-danger border-4 ps-2 mb-2">
-                        <div class="d-flex justify-content-between">
-                            <div>
-                                <strong>${detail.name}</strong><br>
-                                <small>Cartão: ${cardTypeNames[detail.cardType]}</small><br>
-                                <small>Data compra: ${fixLocalDate(detail.date).toLocaleDateString()}</small><br>
-                                <small>Parcela: ${detail.installment}/${detail.totalInstallments}</small><br>
-                                <small class="text-danger">Vencimento: ${dueDateFormatted}</small>
-                                ${detail.paymentDate ? `<br><small class="text-success">Data de pagamento: ${detail.paymentDate}</small>` : ''}
-                                ${amortizedInfo}
-                            </div>
-                            <div class="text-end">
-                                <span class="fw-bold">${formatCurrency(detail.value)}</span>
-                                ${detail.amortizedAmount > 0 ? `<br><small class="text-muted text-decoration-line-through">${formatCurrency(detail.originalValue)}</small>` : ''}
-                                <br><span class="badge bg-danger">Atrasado</span>
-                            </div>
+    }
+    
+    const atrasados = details.filter(d => d.status === 'Atrasado');
+    const pendentesAtual = details.filter(d => d.status === 'Pendente (mês atual)');
+    const pagos = details.filter(d => d.status.includes('Pago em'));
+    
+    if (atrasados.length > 0) {
+        detailsHtml += `<h6 class="text-danger mb-2">Parcelas Atrasadas (${atrasados.length})</h6>`;
+        detailsHtml += `<p class="text-muted small">Parcelas de meses anteriores que ainda não foram quitadas.</p>`;
+        atrasados.forEach(detail => {
+            const cardTypeNames = {
+                'sicredi': 'Sicredi',
+                'porto': 'Porto',
+                'mp': 'Mercado Pago',
+                'fixed': 'Fixo'
+            };
+            
+            const dueDateFormatted = `${detail.dueDay}/${String(detail.dueMonth).padStart(2, '0')}/${detail.dueYear}`;
+            const amortizedInfo = detail.amortizedAmount > 0 ? `<br><small class="text-success">Amortizado: ${formatCurrency(detail.amortizedAmount)}</small>` : '';
+            
+            detailsHtml += `
+                <div class="loan-detail-item border-start border-danger border-4 ps-2 mb-2">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <strong>${detail.name}</strong><br>
+                            <small>Cartão: ${cardTypeNames[detail.cardType]}</small><br>
+                            <small>Data compra: ${fixLocalDate(detail.date).toLocaleDateString()}</small><br>
+                            <small>Parcela: ${detail.installment}/${detail.totalInstallments}</small><br>
+                            <small class="text-danger">Vencimento: ${dueDateFormatted}</small>
+                            ${detail.paymentDate ? `<br><small class="text-success">Data de pagamento: ${detail.paymentDate}</small>` : ''}
+                            ${amortizedInfo}
+                            <br><small class="text-danger"><i class="fas fa-clock me-1"></i>Mês anterior em aberto</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="fw-bold">${formatCurrency(detail.value)}</span>
+                            ${detail.amortizedAmount > 0 ? `<br><small class="text-muted text-decoration-line-through">${formatCurrency(detail.originalValue)}</small>` : ''}
+                            <br><span class="badge bg-danger">Atrasado</span>
                         </div>
                     </div>
-                `;
-            });
-        }
-        
-        if (pendentesAtual.length > 0) {
-            detailsHtml += '<h6 class="text-warning mt-3 mb-2">Pendentes (Mês Atual)</h6>';
-            pendentesAtual.forEach(detail => {
-                const cardTypeNames = {
-                    'sicredi': 'Sicredi',
-                    'porto': 'Porto',
-                    'mp': 'Mercado Pago',
-                    'fixed': 'Fixo'
-                };
-                
-                const dueDateFormatted = `${detail.dueDay}/${String(detail.dueMonth).padStart(2, '0')}/${detail.dueYear}`;
-                const amortizedInfo = detail.amortizedAmount > 0 ? `<br><small class="text-success">Amortizado: ${formatCurrency(detail.amortizedAmount)}</small>` : '';
-                
-                detailsHtml += `
-                    <div class="loan-detail-item border-start border-warning border-4 ps-2 mb-2">
-                        <div class="d-flex justify-content-between">
-                            <div>
-                                <strong>${detail.name}</strong><br>
-                                <small>Cartão: ${cardTypeNames[detail.cardType]}</small><br>
-                                <small>Data compra: ${fixLocalDate(detail.date).toLocaleDateString()}</small><br>
-                                <small>Parcela: ${detail.installment}/${detail.totalInstallments}</small><br>
-                                <small>Vencimento: ${dueDateFormatted}</small>
-                                ${detail.paymentDate ? `<br><small class="text-success">Data de pagamento: ${detail.paymentDate}</small>` : ''}
-                                ${amortizedInfo}
-                            </div>
-                            <div class="text-end">
-                                <span class="fw-bold">${formatCurrency(detail.value)}</span>
-                                ${detail.amortizedAmount > 0 ? `<br><small class="text-muted text-decoration-line-through">${formatCurrency(detail.originalValue)}</small>` : ''}
-                                <br><span class="badge bg-warning">Pendente</span>
-                            </div>
+                </div>
+            `;
+        });
+    }
+    
+    if (pendentesAtual.length > 0) {
+        detailsHtml += `<h6 class="text-warning mt-3 mb-2">Pendentes (Mês Atual) (${pendentesAtual.length})</h6>`;
+        pendentesAtual.forEach(detail => {
+            const cardTypeNames = {
+                'sicredi': 'Sicredi',
+                'porto': 'Porto',
+                'mp': 'Mercado Pago',
+                'fixed': 'Fixo'
+            };
+            
+            const dueDateFormatted = `${detail.dueDay}/${String(detail.dueMonth).padStart(2, '0')}/${detail.dueYear}`;
+            const amortizedInfo = detail.amortizedAmount > 0 ? `<br><small class="text-success">Amortizado: ${formatCurrency(detail.amortizedAmount)}</small>` : '';
+            
+            detailsHtml += `
+                <div class="loan-detail-item border-start border-warning border-4 ps-2 mb-2">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <strong>${detail.name}</strong><br>
+                            <small>Cartão: ${cardTypeNames[detail.cardType]}</small><br>
+                            <small>Data compra: ${fixLocalDate(detail.date).toLocaleDateString()}</small><br>
+                            <small>Parcela: ${detail.installment}/${detail.totalInstallments}</small><br>
+                            <small>Vencimento: ${dueDateFormatted}</small>
+                            ${detail.paymentDate ? `<br><small class="text-success">Data de pagamento: ${detail.paymentDate}</small>` : ''}
+                            ${amortizedInfo}
+                        </div>
+                        <div class="text-end">
+                            <span class="fw-bold">${formatCurrency(detail.value)}</span>
+                            ${detail.amortizedAmount > 0 ? `<br><small class="text-muted text-decoration-line-through">${formatCurrency(detail.originalValue)}</small>` : ''}
+                            <br><span class="badge bg-warning">Pendente</span>
                         </div>
                     </div>
-                `;
-            });
-        }
+                </div>
+            `;
+        });
+    }
+    
+if (pagos.length > 0) {
+    detailsHtml += `<h6 class="text-success mt-3 mb-2">Parcelas Pagas (${pagos.length})</h6>`;
+    pagos.forEach(detail => {
+        const cardTypeNames = {
+            'sicredi': 'Sicredi',
+            'porto': 'Porto',
+            'mp': 'Mercado Pago',
+            'fixed': 'Fixo'
+        };
         
-        if (pagos.length > 0) {
-            detailsHtml += '<h6 class="text-success mt-3 mb-2">Parcelas Pagas</h6>';
-            pagos.forEach(detail => {
-                const cardTypeNames = {
-                    'sicredi': 'Sicredi',
-                    'porto': 'Porto',
-                    'mp': 'Mercado Pago',
-                    'fixed': 'Fixo'
-                };
-                
-                const dueDateFormatted = `${detail.dueDay}/${String(detail.dueMonth).padStart(2, '0')}/${detail.dueYear}`;
-                const amortizedInfo = detail.amortizedAmount > 0 ? `<br><small class="text-success">Amortizado: ${formatCurrency(detail.amortizedAmount)}</small>` : '';
-                
-                detailsHtml += `
-                    <div class="loan-detail-item border-start border-success border-4 ps-2 mb-2">
-                        <div class="d-flex justify-content-between">
-                            <div>
-                                <strong>${detail.name}</strong><br>
-                                <small>Cartão: ${cardTypeNames[detail.cardType]}</small><br>
-                                <small>Data compra: ${fixLocalDate(detail.date).toLocaleDateString()}</small><br>
-                                <small>Parcela: ${detail.installment}/${detail.totalInstallments}</small><br>
-                                <small>Vencimento: ${dueDateFormatted}</small><br>
-                                <small class="text-success">Pago em: ${detail.paymentDate}</small>
-                                ${amortizedInfo}
-                            </div>
-                            <div class="text-end">
-                                <span class="fw-bold">${formatCurrency(detail.value)}</span>
-                                ${detail.amortizedAmount > 0 ? `<br><small class="text-muted text-decoration-line-through">${formatCurrency(detail.originalValue)}</small>` : ''}
-                                <br><span class="badge bg-success">Pago</span>
-                            </div>
-                        </div>
+        const dueDateFormatted = `${detail.dueDay}/${String(detail.dueMonth).padStart(2, '0')}/${detail.dueYear}`;
+        const amortizedInfo = detail.amortizedAmount > 0 ? `<br><small class="text-success">Amortizado: ${formatCurrency(detail.amortizedAmount)}</small>` : '';
+        const fullyAmortizedBadge = detail.isFullyAmortized ? 
+            '<br><span class="badge bg-info">100% amortizado</span>' : '';
+        
+        detailsHtml += `
+            <div class="loan-detail-item border-start border-success border-4 ps-2 mb-2">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <strong>${detail.name}</strong><br>
+                        <small>Cartão: ${cardTypeNames[detail.cardType]}</small><br>
+                        <small>Data compra: ${fixLocalDate(detail.date).toLocaleDateString()}</small><br>
+                        <small>Parcela: ${detail.installment}/${detail.totalInstallments}</small><br>
+                        <small>Vencimento: ${dueDateFormatted}</small><br>
+                        <small class="text-success">Pago em: ${detail.paymentDate}</small>
+                        ${amortizedInfo}
+                        ${fullyAmortizedBadge}
                     </div>
-                `;
-            });
-        }
-        
-        document.getElementById('loanDetailsBody').innerHTML = detailsHtml;
-        modal.show();
-    };
+                    <div class="text-end">
+                        <span class="fw-bold">${formatCurrency(detail.value)}</span>
+                        ${detail.amortizedAmount > 0 ? `<br><small class="text-muted text-decoration-line-through">${formatCurrency(detail.originalValue)}</small>` : ''}
+                        <br><span class="badge bg-success">Pago</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+}
+    
+    document.getElementById('loanDetailsBody').innerHTML = detailsHtml;
+    modal.show();
+};
 
     // Amortization functions
     window.openAmortizationModal = function(debtor) {
@@ -2384,148 +2514,188 @@
     };
 
     document.getElementById('save-amortization-btn').addEventListener('click', function() {
-        const debtor = document.getElementById('amortization-debtor').value;
-        const amortizationValue = parseCurrencyInput(document.getElementById('amortization-value').value);
-        const amortizationDate = document.getElementById('amortization-date').value;
-        
-        if (!amortizationValue || amortizationValue <= 0) {
-            alert('Por favor, informe um valor válido para amortização.');
-            return;
-        }
-        
-        if (!amortizationDate) {
-            alert('Por favor, informe a data da amortização.');
-            return;
-        }
-        
-        let remainingAmortization = amortizationValue;
-        const month = loanMonth;
-        const year = loanYear;
-        
-        database.ref(`users/${currentUser.uid}`).once('value')
-            .then((snapshot) => {
-                const userData = snapshot.val();
-                const updates = {};
-                let amortizedTotal = 0;
-                let amortizedItems = [];
-                
-                // Process credit card expenses
-                const cardTypes = ['sicredi', 'porto', 'mp'];
-                cardTypes.forEach(cardType => {
-                    if (userData[cardType + 'Expenses']) {
-                        Object.entries(userData[cardType + 'Expenses']).forEach(([key, expense]) => {
-                            if (!expense.hidden && expense.observation === debtor && remainingAmortization > 0) {
-                                const dueDates = calculateDueDates(expense.date, expense.closingDay, cardType, expense.installments);
-                                dueDates.forEach(dueDate => {
-                                    if (dueDate.month === month && dueDate.year === year && remainingAmortization > 0) {
-                                        const paid = expense.paidInstallments && expense.paidInstallments[`${year}-${month}-${dueDate.installment}`];
-                                        if (!paid) {
-                                            let currentAmortized = 0;
-                                            const amortKey = `${year}-${month}-${dueDate.installment}`;
-                                            if (expense.amortizations && expense.amortizations[amortKey]) {
-                                                currentAmortized = expense.amortizations[amortKey].amount || 0;
-                                            }
-                                            const currentValue = expense.value - currentAmortized;
+    const debtor = document.getElementById('amortization-debtor').value;
+    const amortizationValue = parseCurrencyInput(document.getElementById('amortization-value').value);
+    const amortizationDate = document.getElementById('amortization-date').value;
+    
+    if (!amortizationValue || amortizationValue <= 0) {
+        alert('Por favor, informe um valor válido para amortização.');
+        return;
+    }
+    
+    if (!amortizationDate) {
+        alert('Por favor, informe a data da amortização.');
+        return;
+    }
+    
+    let remainingAmortization = amortizationValue;
+    const month = loanMonth;
+    const year = loanYear;
+    
+    database.ref(`users/${currentUser.uid}`).once('value')
+        .then((snapshot) => {
+            const userData = snapshot.val();
+            const updates = {};
+            const paymentUpdates = {}; // Para marcar como pago se 100% amortizado
+            let amortizedTotal = 0;
+            let amortizedItems = [];
+            let fullyAmortizedItems = [];
+            
+            // Process credit card expenses
+            const cardTypes = ['sicredi', 'porto', 'mp'];
+            cardTypes.forEach(cardType => {
+                if (userData[cardType + 'Expenses']) {
+                    Object.entries(userData[cardType + 'Expenses']).forEach(([key, expense]) => {
+                        if (!expense.hidden && expense.observation === debtor && remainingAmortization > 0) {
+                            const dueDates = calculateDueDates(expense.date, expense.closingDay, cardType, expense.installments);
+                            dueDates.forEach(dueDate => {
+                                if (dueDate.month === month && dueDate.year === year && remainingAmortization > 0) {
+                                    const paid = expense.paidInstallments && expense.paidInstallments[`${year}-${month}-${dueDate.installment}`];
+                                    if (!paid) {
+                                        let currentAmortized = 0;
+                                        const amortKey = `${year}-${month}-${dueDate.installment}`;
+                                        if (expense.amortizations && expense.amortizations[amortKey]) {
+                                            currentAmortized = expense.amortizations[amortKey].amount || 0;
+                                        }
+                                        const currentValue = expense.value - currentAmortized;
+                                        
+                                        if (currentValue > 0) {
+                                            const toAmortize = Math.min(remainingAmortization, currentValue);
+                                            const newAmortized = currentAmortized + toAmortize;
+                                            const newValue = expense.value - newAmortized;
+                                            amortizedTotal += toAmortize;
+                                            remainingAmortization -= toAmortize;
                                             
-                                            if (currentValue > 0) {
-                                                const toAmortize = Math.min(remainingAmortization, currentValue);
-                                                const newAmortized = currentAmortized + toAmortize;
-                                                amortizedTotal += toAmortize;
-                                                remainingAmortization -= toAmortize;
-                                                
-                                                updates[`users/${currentUser.uid}/${cardType}Expenses/${key}/amortizations/${amortKey}`] = {
-                                                    amount: newAmortized,
-                                                    date: amortizationDate,
-                                                    originalAmount: expense.value
-                                                };
-                                                
-                                                amortizedItems.push({
+                                            updates[`users/${currentUser.uid}/${cardType}Expenses/${key}/amortizations/${amortKey}`] = {
+                                                amount: newAmortized,
+                                                date: amortizationDate,
+                                                originalAmount: expense.value
+                                            };
+                                            
+                                            // Se ficou 100% amortizado, marcar como pago
+                                            if (newValue <= 0) {
+                                                paymentUpdates[`users/${currentUser.uid}/${cardType}Expenses/${key}/paidInstallments/${year}-${month}-${dueDate.installment}`] = true;
+                                                paymentUpdates[`users/${currentUser.uid}/${cardType}Expenses/${key}/paymentDates/${year}-${month}-${dueDate.installment}`] = amortizationDate;
+                                                fullyAmortizedItems.push({
                                                     name: expense.name,
                                                     installment: dueDate.installment,
-                                                    totalInstallments: expense.installments,
-                                                    amount: toAmortize,
-                                                    newValue: expense.value - newAmortized
+                                                    totalInstallments: expense.installments
                                                 });
                                             }
+                                            
+                                            amortizedItems.push({
+                                                name: expense.name,
+                                                installment: dueDate.installment,
+                                                totalInstallments: expense.installments,
+                                                amount: toAmortize,
+                                                newValue: newValue,
+                                                isFullyAmortized: newValue <= 0
+                                            });
                                         }
                                     }
-                                });
-                            }
-                        });
-                    }
-                });
-                
-                // Process fixed expenses
-                if (userData.fixedExpenses && remainingAmortization > 0) {
-                    Object.entries(userData.fixedExpenses).forEach(([key, expense]) => {
-                        if (!expense.hidden && expense.observation === debtor && remainingAmortization > 0) {
-                            const paid = expense.paidMonths && expense.paidMonths[`${year}-${month}`];
-                            if (!paid) {
-                                let currentAmortized = 0;
-                                const amortKey = `${year}-${month}`;
-                                if (expense.amortizations && expense.amortizations[amortKey]) {
-                                    currentAmortized = expense.amortizations[amortKey].amount || 0;
                                 }
-                                const currentValue = expense.value - currentAmortized;
-                                
-                                if (currentValue > 0) {
-                                    const toAmortize = Math.min(remainingAmortization, currentValue);
-                                    const newAmortized = currentAmortized + toAmortize;
-                                    amortizedTotal += toAmortize;
-                                    remainingAmortization -= toAmortize;
-                                    
-                                    updates[`users/${currentUser.uid}/fixedExpenses/${key}/amortizations/${amortKey}`] = {
-                                        amount: newAmortized,
-                                        date: amortizationDate,
-                                        originalAmount: expense.value
-                                    };
-                                    
-                                    amortizedItems.push({
-                                        name: expense.name,
-                                        installment: 1,
-                                        totalInstallments: 1,
-                                        amount: toAmortize,
-                                        newValue: expense.value - newAmortized
-                                    });
-                                }
-                            }
+                            });
                         }
                     });
                 }
-                
-                if (amortizedTotal === 0) {
-                    alert('Não foi possível amortizar nenhum valor. Verifique se há dívidas pendentes para este mês.');
-                    return;
-                }
-                
-                // Confirm with user
-                let confirmMsg = `Amortização de ${formatCurrency(amortizedTotal)} aplicada a:\n\n`;
-                amortizedItems.forEach(item => {
-                    confirmMsg += `- ${item.name} (${item.installment}/${item.totalInstallments}): ${formatCurrency(item.amount)} -> Novo saldo: ${formatCurrency(item.newValue)}\n`;
-                });
-                if (remainingAmortization > 0) {
-                    confirmMsg += `\n⚠️ Saldo remanescente: ${formatCurrency(remainingAmortization)} (não foi possível amortizar totalmente)`;
-                }
-                
-                if (confirm(confirmMsg + '\n\nConfirmar amortização?')) {
-                    database.ref().update(updates)
-                        .then(() => {
-                            bootstrap.Modal.getInstance(document.getElementById('amortizationModal')).hide();
-                            updateBillsSummary();
-                            loadLoansDetailed();
-                            alert(`Amortização de ${formatCurrency(amortizedTotal)} realizada com sucesso!`);
-                        })
-                        .catch((error) => {
-                            console.error('Erro ao realizar amortização:', error);
-                            alert('Erro ao realizar amortização. Tente novamente.');
-                        });
-                }
-            })
-            .catch((error) => {
-                console.error('Erro ao carregar dados:', error);
-                alert('Erro ao carregar dados. Tente novamente.');
             });
-    });
+            
+            // Process fixed expenses
+            if (userData.fixedExpenses && remainingAmortization > 0) {
+                Object.entries(userData.fixedExpenses).forEach(([key, expense]) => {
+                    if (!expense.hidden && expense.observation === debtor && remainingAmortization > 0) {
+                        const paid = expense.paidMonths && expense.paidMonths[`${year}-${month}`];
+                        if (!paid) {
+                            let currentAmortized = 0;
+                            const amortKey = `${year}-${month}`;
+                            if (expense.amortizations && expense.amortizations[amortKey]) {
+                                currentAmortized = expense.amortizations[amortKey].amount || 0;
+                            }
+                            const currentValue = expense.value - currentAmortized;
+                            
+                            if (currentValue > 0) {
+                                const toAmortize = Math.min(remainingAmortization, currentValue);
+                                const newAmortized = currentAmortized + toAmortize;
+                                const newValue = expense.value - newAmortized;
+                                amortizedTotal += toAmortize;
+                                remainingAmortization -= toAmortize;
+                                
+                                updates[`users/${currentUser.uid}/fixedExpenses/${key}/amortizations/${amortKey}`] = {
+                                    amount: newAmortized,
+                                    date: amortizationDate,
+                                    originalAmount: expense.value
+                                };
+                                
+                                // Se ficou 100% amortizado, marcar como pago
+                                if (newValue <= 0) {
+                                    paymentUpdates[`users/${currentUser.uid}/fixedExpenses/${key}/paidMonths/${year}-${month}`] = true;
+                                    paymentUpdates[`users/${currentUser.uid}/fixedExpenses/${key}/paymentDates/${year}-${month}`] = amortizationDate;
+                                    fullyAmortizedItems.push({
+                                        name: expense.name,
+                                        installment: 1,
+                                        totalInstallments: 1
+                                    });
+                                }
+                                
+                                amortizedItems.push({
+                                    name: expense.name,
+                                    installment: 1,
+                                    totalInstallments: 1,
+                                    amount: toAmortize,
+                                    newValue: newValue,
+                                    isFullyAmortized: newValue <= 0
+                                });
+                            }
+                        }
+                    }
+                });
+            }
+            
+            if (amortizedTotal === 0) {
+                alert('Não foi possível amortizar nenhum valor. Verifique se há dívidas pendentes para este mês.');
+                return;
+            }
+            
+            // Combinar todas as atualizações
+            const allUpdates = { ...updates, ...paymentUpdates };
+            
+            // Confirm with user
+            let confirmMsg = `Amortização de ${formatCurrency(amortizedTotal)} aplicada a:\n\n`;
+            amortizedItems.forEach(item => {
+                const statusText = item.isFullyAmortized ? '✅ 100% quitado!' : `Novo saldo: ${formatCurrency(item.newValue)}`;
+                confirmMsg += `- ${item.name} (${item.installment}/${item.totalInstallments}): ${formatCurrency(item.amount)} -> ${statusText}\n`;
+            });
+            if (remainingAmortization > 0) {
+                confirmMsg += `\n⚠️ Saldo remanescente: ${formatCurrency(remainingAmortization)} (não foi possível amortizar totalmente)`;
+            }
+            
+            if (fullyAmortizedItems.length > 0) {
+                confirmMsg += `\n\n✅ ${fullyAmortizedItems.length} parcela(s) foram completamente quitadas pela amortização!`;
+            }
+            
+            if (confirm(confirmMsg + '\n\nConfirmar amortização?')) {
+                database.ref().update(allUpdates)
+                    .then(() => {
+                        bootstrap.Modal.getInstance(document.getElementById('amortizationModal')).hide();
+                        updateBillsSummary();
+                        loadLoansDetailed();
+                        let msg = `Amortização de ${formatCurrency(amortizedTotal)} realizada com sucesso!`;
+                        if (fullyAmortizedItems.length > 0) {
+                            msg += `\n\n${fullyAmortizedItems.length} parcela(s) foram completamente quitadas pela amortização.`;
+                        }
+                        alert(msg);
+                    })
+                    .catch((error) => {
+                        console.error('Erro ao realizar amortização:', error);
+                        alert('Erro ao realizar amortização. Tente novamente.');
+                    });
+            }
+        })
+        .catch((error) => {
+            console.error('Erro ao carregar dados:', error);
+            alert('Erro ao carregar dados. Tente novamente.');
+        });
+});
 
     // Payment toggle functions
     window.toggleFixedPayment = function(expenseKey, month, year) {
