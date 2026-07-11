@@ -1936,57 +1936,78 @@ expenses.forEach((expense) => {
             });
     }
 
-    function loadCreditCardExpensesForBills(cardType, month, year) {
-        database.ref(`users/${currentUser.uid}/${cardType}Expenses`).once('value')
-            .then((snapshot) => {
-                let totalCard = 0;
-                let cardHtml = '';
+function loadCreditCardExpensesForBills(cardType, month, year) {
+    database.ref(`users/${currentUser.uid}/${cardType}Expenses`).once('value')
+        .then((snapshot) => {
+            let totalCard = 0;
+            let cardHtml = '';
+            
+            // Criar um array para armazenar os gastos com suas datas
+            const expensesArray = [];
+            
+            snapshot.forEach((childSnapshot) => {
+                const expense = childSnapshot.val();
+                expense.key = childSnapshot.key;
                 
-                snapshot.forEach((childSnapshot) => {
-                    const expense = childSnapshot.val();
-                    const key = childSnapshot.key;
-                    
-                    if (expense.hidden) return;
-                    
-                    const installmentsThisMonth = calculateInstallmentsForMonth(expense, month, year, cardType);
-                    
-                    installmentsThisMonth.forEach((installment) => {
-                        const paid = expense.paidInstallments && expense.paidInstallments[`${year}-${month}-${installment.installment}`];
-                        
-                        totalCard += installment.value;
-                        
-                        const isLoan = expense.observation ? true : false;
-                        const purchaseDate = fixLocalDate(expense.date).toLocaleDateString();
-                        
-                        cardHtml += `
-                            <div class="expense-item d-flex justify-content-between align-items-center ${paid ? 'paid' : ''}">
-                                <div>
-                                    <span>${expense.name} (${installment.installment}/${expense.installments})</span>
-                                    <small class="text-muted d-block">Compra: ${purchaseDate}</small>
-                                    ${expense.observation ? `<small class="text-muted d-block">Empréstimo: ${expense.observation}</small>` : ''}
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <span class="me-2">${formatCurrency(installment.value)}</span>
-                                    ${isLoan ? `
-                                        <button class="btn btn-sm ${paid ? 'btn-success' : 'btn-outline-success'}" 
-                                                onclick="toggleCardPayment('${cardType}', '${key}', ${installment.installment}, ${month}, ${year})">
-                                            <i class="fas ${paid ? 'fa-check-circle' : 'fa-circle'}"></i>
-                                        </button>
-                                    ` : ''}
-                                </div>
-                            </div>
-                        `;
-                    });
-                });
-                
-                document.getElementById(`${cardType}-summary`).innerHTML = cardHtml || '<p class="text-muted">Nenhum gasto</p>';
-                document.getElementById(`${cardType}-summary-total`).innerHTML = `<strong>Total: ${formatCurrency(totalCard)}</strong>`;
-                
-                summaryData[cardType] = totalCard;
-                updateGeneralTotals();
-                loadLoansDetailed();
+                if (!expense.hidden) {
+                    // Adicionar ao array com a data para ordenação
+                    expensesArray.push(expense);
+                }
             });
-    }
+            
+            // ORDENAR POR DATA DA COMPRA (MAIS RECENTE PRIMEIRO)
+            expensesArray.sort((a, b) => {
+                // Se a data existe, ordenar pela data
+                if (a.date && b.date) {
+                    return b.date.localeCompare(a.date); // Mais recente primeiro
+                }
+                // Se uma das datas não existe, colocar no final
+                if (a.date) return -1;
+                if (b.date) return 1;
+                return 0;
+            });
+            
+            // Processar os gastos já ordenados
+            expensesArray.forEach((expense) => {
+                const installmentsThisMonth = calculateInstallmentsForMonth(expense, month, year, cardType);
+                
+                installmentsThisMonth.forEach((installment) => {
+                    const paid = expense.paidInstallments && expense.paidInstallments[`${year}-${month}-${installment.installment}`];
+                    
+                    totalCard += installment.value;
+                    
+                    const isLoan = expense.observation ? true : false;
+                    const purchaseDate = fixLocalDate(expense.date).toLocaleDateString();
+                    
+                    cardHtml += `
+                        <div class="expense-item d-flex justify-content-between align-items-center ${paid ? 'paid' : ''}">
+                            <div>
+                                <span>${expense.name} (${installment.installment}/${expense.installments})</span>
+                                <small class="text-muted d-block">Compra: ${purchaseDate}</small>
+                                ${expense.observation ? `<small class="text-muted d-block">Empréstimo: ${expense.observation}</small>` : ''}
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <span class="me-2">${formatCurrency(installment.value)}</span>
+                                ${isLoan ? `
+                                    <button class="btn btn-sm ${paid ? 'btn-success' : 'btn-outline-success'}" 
+                                            onclick="toggleCardPayment('${cardType}', '${expense.key}', ${installment.installment}, ${month}, ${year})">
+                                        <i class="fas ${paid ? 'fa-check-circle' : 'fa-circle'}"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+            });
+            
+            document.getElementById(`${cardType}-summary`).innerHTML = cardHtml || '<p class="text-muted">Nenhum gasto</p>';
+            document.getElementById(`${cardType}-summary-total`).innerHTML = `<strong>Total: ${formatCurrency(totalCard)}</strong>`;
+            
+            summaryData[cardType] = totalCard;
+            updateGeneralTotals();
+            loadLoansDetailed();
+        });
+}
 
     function calculateInstallmentsForMonth(expense, targetMonth, targetYear, cardType) {
         const installments = [];
