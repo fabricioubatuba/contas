@@ -263,6 +263,11 @@
             font-size: 1.1rem;
             font-weight: 600;
         }
+        
+        .future-installment {
+            background-color: #e3f2fd;
+            border-left: 4px solid #1976d2;
+        }
     </style>
 </head>
 <body>
@@ -857,7 +862,7 @@
 
     <!-- Amortization Modal -->
     <div class="modal fade" id="amortizationModal" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">Amortizar Empréstimo</h5>
@@ -872,7 +877,7 @@
                             <small class="form-text text-muted">Digite apenas números (ex: 12356 = 123,56)</small>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Data da Amortização</label>
+                            <label class="form-label">Data do Pagamento</label>
                             <input type="date" class="form-control" id="amortization-date" required>
                         </div>
                         <div id="amortization-preview" class="mb-3">
@@ -2096,8 +2101,9 @@
                                     
                                     const isSelectedMonth = (parcelYear === year && parcelMonth === month);
                                     const isPreviousMonth = (parcelYear === year && parcelMonth < month) || (parcelYear < year);
+                                    const isFutureMonth = (parcelYear > year) || (parcelYear === year && parcelMonth > month);
                                     
-                                    if (isSelectedMonth || isPreviousMonth) {
+                                    if (isSelectedMonth || isPreviousMonth || isFutureMonth) {
                                         const paid = expense.paidInstallments && expense.paidInstallments[`${parcelYear}-${parcelMonth}-${i}`];
                                         const paymentDate = expense.paymentDates && expense.paymentDates[`${parcelYear}-${parcelMonth}-${i}`];
                                         
@@ -2138,6 +2144,8 @@
                                         } else if (isPreviousMonth) {
                                             status = 'Atrasado';
                                             loans[expense.observation].hasPreviousMonths = true;
+                                        } else if (isFutureMonth) {
+                                            status = 'Futuro';
                                         }
                                         
                                         loans[expense.observation].details.push({
@@ -2159,12 +2167,9 @@
                                             status: status,
                                             isPreviousMonth: isPreviousMonth,
                                             isSelectedMonth: isSelectedMonth,
+                                            isFutureMonth: isFutureMonth,
                                             isOverdue: isPreviousMonth && !isPaid
                                         });
-                                        
-                                        if (isSelectedMonth) {
-                                            loans[expense.observation].total += currentValue;
-                                        }
                                     }
                                 }
                             }
@@ -2194,8 +2199,9 @@
                                     
                                     const isSelectedMonth = (parcelYear === year && parcelMonth === month);
                                     const isPreviousMonth = (parcelYear === year && parcelMonth < month) || (parcelYear < year);
+                                    const isFutureMonth = (parcelYear > year) || (parcelYear === year && parcelMonth > month);
                                     
-                                    if (isSelectedMonth || isPreviousMonth) {
+                                    if (isSelectedMonth || isPreviousMonth || isFutureMonth) {
                                         const paid = expense.paidMonths && expense.paidMonths[`${parcelYear}-${parcelMonth}`];
                                         const paymentDate = expense.paymentDates && expense.paymentDates[`${parcelYear}-${parcelMonth}`];
                                         
@@ -2236,6 +2242,8 @@
                                         } else if (isPreviousMonth) {
                                             status = 'Atrasado';
                                             loans[expense.observation].hasPreviousMonths = true;
+                                        } else if (isFutureMonth) {
+                                            status = 'Futuro';
                                         }
                                         
                                         loans[expense.observation].details.push({
@@ -2257,12 +2265,9 @@
                                             status: status,
                                             isPreviousMonth: isPreviousMonth,
                                             isSelectedMonth: isSelectedMonth,
+                                            isFutureMonth: isFutureMonth,
                                             isOverdue: isPreviousMonth && !isPaid
                                         });
-                                        
-                                        if (isSelectedMonth) {
-                                            loans[expense.observation].total += currentValue;
-                                        }
                                     }
                                 });
                             } else {
@@ -2331,12 +2336,9 @@
                                         status: status,
                                         isPreviousMonth: isPreviousMonth,
                                         isSelectedMonth: isSelectedMonth,
+                                        isFutureMonth: false,
                                         isOverdue: isPreviousMonth && !isPaid
                                     });
-                                    
-                                    if (isSelectedMonth) {
-                                        loans[expense.observation].total += currentValue;
-                                    }
                                 }
                             }
                         }
@@ -2354,11 +2356,15 @@
             
             for (const person of sortedDebtors) {
                 const data = loans[person];
-                totalLoans += data.total;
+                
+                // Só mostra o total do mês selecionado
+                const monthTotal = data.details
+                    .filter(d => d.dueMonth === loanMonth && d.dueYear === loanYear)
+                    .reduce((sum, d) => sum + d.value, 0);
+                
+                totalLoans += monthTotal;
                 
                 const hasOverdue = data.details.some(d => d.isOverdue === true);
-                const hasAtrasadas = data.details.some(d => d.status === 'Atrasado');
-                
                 const atrasadasCount = data.details.filter(d => d.status === 'Atrasado').length;
                 const atrasadoBadge = hasOverdue ? 
                     `<span class="badge bg-danger ms-2">${atrasadasCount} parcela(s) atrasada(s)</span>` : '';
@@ -2375,10 +2381,10 @@
                             <div class="d-flex justify-content-between align-items-center flex-wrap">
                                 <div>
                                     <h6 class="mb-0">${person} ${atrasadoBadge}</h6>
-                                    <small class="text-muted">Total do mês: ${formatCurrency(data.total)}</small>
+                                    <small class="text-muted">Total do mês: ${formatCurrency(monthTotal)}</small>
                                 </div>
                                 <div>
-                                    <span class="fw-bold me-3">${formatCurrency(data.total)}</span>
+                                    <span class="fw-bold me-3">${formatCurrency(monthTotal)}</span>
                                     <button class="btn btn-sm btn-success" onclick="openAmortizationModal('${person}')">
                                         <i class="fas fa-hand-holding-usd me-1"></i>Amortizar
                                     </button>
@@ -2417,9 +2423,9 @@
         const atrasados = filteredDetails.filter(d => d.status === 'Atrasado');
         const pendentes = filteredDetails.filter(d => d.status === 'Pendente (mês atual)');
         const pagos = filteredDetails.filter(d => d.status.includes('Pago em') || d.status.includes('100% amortizado'));
+        const futuros = filteredDetails.filter(d => d.status === 'Futuro');
         
         const totalDevido = filteredDetails.reduce((sum, detail) => sum + detail.value, 0);
-        const hasOverdue = atrasados.length > 0;
         
         let detailsHtml = `
             <div class="alert alert-info mb-3">
@@ -2513,6 +2519,43 @@
             });
         }
         
+        if (futuros.length > 0) {
+            detailsHtml += `<h6 class="text-info mt-3 mb-2">Parcelas Futuras (${futuros.length})</h6>`;
+            detailsHtml += `<p class="text-muted small">Parcelas que vencerão em meses futuros.</p>`;
+            futuros.forEach(detail => {
+                const cardTypeNames = {
+                    'sicredi': 'Sicredi',
+                    'porto': 'Porto',
+                    'mp': 'Mercado Pago',
+                    'fixed': 'Fixo'
+                };
+                
+                const dueDateFormatted = `${detail.dueDay}/${String(detail.dueMonth).padStart(2, '0')}/${detail.dueYear}`;
+                const amortizedInfo = detail.amortizedAmount > 0 ? `<br><small class="text-success">Amortizado: ${formatCurrency(detail.amortizedAmount)}</small>` : '';
+                
+                detailsHtml += `
+                    <div class="loan-detail-item border-start border-info border-4 ps-2 mb-2">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <strong>${detail.name}</strong><br>
+                                <small>Cartão: ${cardTypeNames[detail.cardType]}</small><br>
+                                <small>Data compra: ${fixLocalDate(detail.date).toLocaleDateString()}</small><br>
+                                <small>Parcela: ${detail.installment}/${detail.totalInstallments}</small><br>
+                                <small>Vencimento: ${dueDateFormatted}</small>
+                                ${detail.paymentDate ? `<br><small class="text-success">Data de pagamento: ${detail.paymentDate}</small>` : ''}
+                                ${amortizedInfo}
+                            </div>
+                            <div class="text-end">
+                                <span class="fw-bold">${formatCurrency(detail.value)}</span>
+                                ${detail.amortizedAmount > 0 ? `<br><small class="text-muted text-decoration-line-through">${formatCurrency(detail.originalValue)}</small>` : ''}
+                                <br><span class="badge bg-info">Futuro</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
         if (pagos.length > 0) {
             detailsHtml += `<h6 class="text-success mt-3 mb-2">Parcelas Pagas (${pagos.length})</h6>`;
             pagos.forEach(detail => {
@@ -2568,55 +2611,86 @@
         return `${months[month - 1]} de ${year}`;
     }
 
-    // Amortization functions
+    // AMORTIZATION FUNCTIONS - ATUALIZADO PARA CONSIDERAR TODAS AS PARCELAS FUTURAS
     window.openAmortizationModal = function(debtor) {
         document.getElementById('amortization-debtor').value = debtor;
         document.getElementById('amortization-value').value = '';
         document.getElementById('amortization-date').value = new Date().toISOString().split('T')[0];
         document.getElementById('amortization-preview').innerHTML = '';
         
-        const month = loanMonth;
-        const year = loanYear;
-        
+        // Busca TODAS as dívidas do devedor (independente do mês selecionado)
         database.ref(`users/${currentUser.uid}`).once('value')
             .then((snapshot) => {
                 const userData = snapshot.val();
-                let debts = [];
+                let allDebts = [];
                 let totalDebt = 0;
+                const today = new Date();
+                const currentYear = today.getFullYear();
+                const currentMonth = today.getMonth() + 1;
                 
+                // Função para verificar se uma parcela já foi paga
+                function isInstallmentPaid(expense, year, month, installment) {
+                    if (expense.paidInstallments) {
+                        return expense.paidInstallments[`${year}-${month}-${installment}`] || false;
+                    }
+                    return false;
+                }
+                
+                function isFixedPaid(expense, year, month) {
+                    if (expense.paidMonths) {
+                        return expense.paidMonths[`${year}-${month}`] || false;
+                    }
+                    return false;
+                }
+                
+                // Coleta TODAS as dívidas de cartões de crédito
                 const cardTypes = ['sicredi', 'porto', 'mp'];
                 cardTypes.forEach(cardType => {
                     if (userData[cardType + 'Expenses']) {
-                        Object.values(userData[cardType + 'Expenses']).forEach(expense => {
+                        Object.entries(userData[cardType + 'Expenses']).forEach(([key, expense]) => {
                             if (!expense.hidden && expense.observation === debtor) {
                                 const dueDates = calculateDueDates(expense.date, expense.closingDay, cardType, expense.installments);
                                 dueDates.forEach(dueDate => {
-                                    if (dueDate.month === month && dueDate.year === year) {
-                                        const paid = expense.paidInstallments && expense.paidInstallments[`${year}-${month}-${dueDate.installment}`];
-                                        if (!paid) {
-                                            let amortizedAmount = 0;
-                                            const amortKey = `${year}-${month}-${dueDate.installment}`;
-                                            if (expense.amortizations && expense.amortizations[amortKey]) {
-                                                amortizedAmount = expense.amortizations[amortKey].amount || 0;
+                                    const { year, month, installment } = dueDate;
+                                    const isPaid = isInstallmentPaid(expense, year, month, installment);
+                                    
+                                    // Verifica se a parcela já foi paga
+                                    if (!isPaid) {
+                                        let amortizedAmount = 0;
+                                        const amortKey = `${year}-${month}-${installment}`;
+                                        if (expense.amortizations && expense.amortizations[amortKey]) {
+                                            amortizedAmount = expense.amortizations[amortKey].amount || 0;
+                                        }
+                                        const currentValue = expense.value - amortizedAmount;
+                                        
+                                        if (currentValue > 0) {
+                                            // Verifica se é atrasada, atual ou futura
+                                            let status = 'futuro';
+                                            if (year < currentYear || (year === currentYear && month < currentMonth)) {
+                                                status = 'atrasado';
+                                            } else if (year === currentYear && month === currentMonth) {
+                                                status = 'atual';
                                             }
-                                            const currentValue = expense.value - amortizedAmount;
-                                            if (currentValue > 0) {
-                                                debts.push({
-                                                    name: expense.name,
-                                                    installment: dueDate.installment,
-                                                    totalInstallments: expense.installments,
-                                                    originalValue: expense.value,
-                                                    currentValue: currentValue,
-                                                    cardType: cardType,
-                                                    expenseKey: Object.keys(userData[cardType + 'Expenses']).find(key => 
-                                                        userData[cardType + 'Expenses'][key] === expense
-                                                    ),
-                                                    dueDate: dueDate,
-                                                    amortKey: amortKey,
-                                                    isFixed: false
-                                                });
-                                                totalDebt += currentValue;
-                                            }
+                                            
+                                            allDebts.push({
+                                                name: expense.name,
+                                                installment: installment,
+                                                totalInstallments: expense.installments,
+                                                originalValue: expense.value,
+                                                currentValue: currentValue,
+                                                cardType: cardType,
+                                                expenseKey: key,
+                                                dueDate: dueDate,
+                                                dueYear: year,
+                                                dueMonth: month,
+                                                amortKey: amortKey,
+                                                path: `${cardType}Expenses/${key}/amortizations/${amortKey}`,
+                                                paidPath: `${cardType}Expenses/${key}/paidInstallments/${year}-${month}-${installment}`,
+                                                paymentDatePath: `${cardType}Expenses/${key}/paymentDates/${year}-${month}-${installment}`,
+                                                isFixed: false,
+                                                status: status
+                                            });
+                                            totalDebt += currentValue;
                                         }
                                     }
                                 });
@@ -2625,50 +2699,67 @@
                     }
                 });
                 
+                // Coleta TODAS as dívidas fixas
                 if (userData.fixedExpenses) {
                     Object.entries(userData.fixedExpenses).forEach(([key, expense]) => {
                         if (!expense.hidden && expense.observation === debtor) {
                             if (expense.installments && expense.installments > 1 && expense.purchaseDate) {
                                 const dueDates = calculateDueDates(expense.purchaseDate, 1, 'fixed', expense.installments);
                                 dueDates.forEach(dueDate => {
-                                    if (dueDate.month === month && dueDate.year === year) {
-                                        const paid = expense.paidMonths && expense.paidMonths[`${year}-${month}`];
-                                        if (!paid) {
-                                            let amortizedAmount = 0;
-                                            const amortKey = `${year}-${month}`;
-                                            if (expense.amortizations && expense.amortizations[amortKey]) {
-                                                amortizedAmount = expense.amortizations[amortKey].amount || 0;
+                                    const { year, month, installment } = dueDate;
+                                    const isPaid = isFixedPaid(expense, year, month);
+                                    
+                                    if (!isPaid) {
+                                        let amortizedAmount = 0;
+                                        const amortKey = `${year}-${month}`;
+                                        if (expense.amortizations && expense.amortizations[amortKey]) {
+                                            amortizedAmount = expense.amortizations[amortKey].amount || 0;
+                                        }
+                                        const currentValue = expense.value - amortizedAmount;
+                                        
+                                        if (currentValue > 0) {
+                                            let status = 'futuro';
+                                            if (year < currentYear || (year === currentYear && month < currentMonth)) {
+                                                status = 'atrasado';
+                                            } else if (year === currentYear && month === currentMonth) {
+                                                status = 'atual';
                                             }
-                                            const currentValue = expense.value - amortizedAmount;
-                                            if (currentValue > 0) {
-                                                debts.push({
-                                                    name: expense.name,
-                                                    installment: dueDate.installment,
-                                                    totalInstallments: expense.installments,
-                                                    originalValue: expense.value,
-                                                    currentValue: currentValue,
-                                                    cardType: 'fixed',
-                                                    expenseKey: key,
-                                                    dueDate: dueDate,
-                                                    amortKey: amortKey,
-                                                    isFixed: true
-                                                });
-                                                totalDebt += currentValue;
-                                            }
+                                            
+                                            allDebts.push({
+                                                name: expense.name,
+                                                installment: installment,
+                                                totalInstallments: expense.installments,
+                                                originalValue: expense.value,
+                                                currentValue: currentValue,
+                                                cardType: 'fixed',
+                                                expenseKey: key,
+                                                dueDate: dueDate,
+                                                dueYear: year,
+                                                dueMonth: month,
+                                                amortKey: amortKey,
+                                                path: `fixedExpenses/${key}/amortizations/${amortKey}`,
+                                                paidPath: `fixedExpenses/${key}/paidMonths/${year}-${month}`,
+                                                paymentDatePath: `fixedExpenses/${key}/paymentDates/${year}-${month}`,
+                                                isFixed: true,
+                                                status: status
+                                            });
+                                            totalDebt += currentValue;
                                         }
                                     }
                                 });
                             } else {
-                                const paid = expense.paidMonths && expense.paidMonths[`${year}-${month}`];
-                                if (!paid) {
+                                // Não parcelado - verifica apenas se já foi pago
+                                const isPaid = isFixedPaid(expense, currentYear, currentMonth);
+                                if (!isPaid) {
                                     let amortizedAmount = 0;
-                                    const amortKey = `${year}-${month}`;
+                                    const amortKey = `${currentYear}-${currentMonth}`;
                                     if (expense.amortizations && expense.amortizations[amortKey]) {
                                         amortizedAmount = expense.amortizations[amortKey].amount || 0;
                                     }
                                     const currentValue = expense.value - amortizedAmount;
+                                    
                                     if (currentValue > 0) {
-                                        debts.push({
+                                        allDebts.push({
                                             name: expense.name,
                                             installment: 1,
                                             totalInstallments: 1,
@@ -2676,9 +2767,15 @@
                                             currentValue: currentValue,
                                             cardType: 'fixed',
                                             expenseKey: key,
-                                            dueDate: { month: month, year: year, installment: 1 },
+                                            dueDate: { year: currentYear, month: currentMonth, installment: 1 },
+                                            dueYear: currentYear,
+                                            dueMonth: currentMonth,
                                             amortKey: amortKey,
-                                            isFixed: true
+                                            path: `fixedExpenses/${key}/amortizations/${amortKey}`,
+                                            paidPath: `fixedExpenses/${key}/paidMonths/${currentYear}-${currentMonth}`,
+                                            paymentDatePath: `fixedExpenses/${key}/paymentDates/${currentYear}-${currentMonth}`,
+                                            isFixed: true,
+                                            status: 'atual'
                                         });
                                         totalDebt += currentValue;
                                     }
@@ -2688,25 +2785,52 @@
                     });
                 }
                 
-                debts.sort((a, b) => a.currentValue - b.currentValue);
+                // ORDENA: primeiro atrasadas, depois atuais, depois futuras
+                // Dentro de cada grupo, ordena por data de vencimento (mais antiga primeiro)
+                allDebts.sort((a, b) => {
+                    // Primeiro por status (atrasado > atual > futuro)
+                    const statusOrder = { 'atrasado': 0, 'atual': 1, 'futuro': 2 };
+                    if (statusOrder[a.status] !== statusOrder[b.status]) {
+                        return statusOrder[a.status] - statusOrder[b.status];
+                    }
+                    // Depois por data (mais antiga primeiro)
+                    if (a.dueYear !== b.dueYear) return a.dueYear - b.dueYear;
+                    if (a.dueMonth !== b.dueMonth) return a.dueMonth - b.dueMonth;
+                    return a.installment - b.installment;
+                });
                 
-                let previewHtml = `<h6 class="mb-2">Dívidas de ${debtor} para o mês selecionado:</h6>`;
+                let previewHtml = `
+                    <div class="alert alert-info">
+                        <strong>Total de dívidas de ${debtor}: ${formatCurrency(totalDebt)}</strong>
+                        <br><small>${allDebts.length} parcela(s) pendente(s)</small>
+                    </div>
+                    <h6 class="mb-2">Dívidas pendentes (ordenadas da mais antiga para a mais nova):</h6>
+                `;
                 
-                if (debts.length === 0) {
-                    previewHtml = `<p class="text-muted">Nenhuma dívida pendente para este mês.</p>`;
+                if (allDebts.length === 0) {
+                    previewHtml = `<p class="text-muted">Nenhuma dívida pendente para este devedor.</p>`;
                     document.getElementById('amortization-preview').innerHTML = previewHtml;
                     return;
                 }
                 
-                debts.forEach((debt, index) => {
+                allDebts.forEach((debt, index) => {
                     const label = `${debt.name} (${debt.installment}/${debt.totalInstallments})`;
-                    const isSmallest = index === 0;
+                    const dueDateFormatted = `${debt.dueDay || 1}/${String(debt.dueMonth).padStart(2, '0')}/${debt.dueYear}`;
+                    
+                    let statusBadge = '';
+                    if (debt.status === 'atrasado') statusBadge = '<span class="badge bg-danger ms-1">Atrasado</span>';
+                    else if (debt.status === 'atual') statusBadge = '<span class="badge bg-warning ms-1">Atual</span>';
+                    else statusBadge = '<span class="badge bg-info ms-1">Futuro</span>';
+                    
+                    const isFirst = index === 0;
                     previewHtml += `
-                        <div class="amortization-item ${isSmallest ? 'border-success' : ''}">
+                        <div class="amortization-item ${isFirst ? 'border-success' : ''}">
                             <div class="d-flex justify-content-between">
                                 <span>
                                     ${label}
-                                    ${isSmallest ? '<span class="badge bg-success ms-1">Menor valor</span>' : ''}
+                                    ${statusBadge}
+                                    ${isFirst ? '<span class="badge bg-success ms-1">Primeira a ser quitada</span>' : ''}
+                                    <br><small class="text-muted">Vencimento: ${dueDateFormatted}</small>
                                 </span>
                                 <span>${formatCurrency(debt.currentValue)}</span>
                             </div>
@@ -2718,7 +2842,7 @@
                 previewHtml += `
                     <div class="mt-2 fw-bold">
                         Total devido: ${formatCurrency(totalDebt)}
-                        <br><small class="text-muted">As dívidas serão amortizadas da menor para a maior</small>
+                        <br><small class="text-muted">As dívidas serão amortizadas na ordem: Atrasadas → Atuais → Futuras</small>
                     </div>
                 `;
                 
@@ -2741,13 +2865,11 @@
         }
         
         if (!amortizationDate) {
-            alert('Por favor, informe a data da amortização.');
+            alert('Por favor, informe a data do pagamento.');
             return;
         }
         
         let remainingAmortization = amortizationValue;
-        const month = loanMonth;
-        const year = loanYear;
         
         database.ref(`users/${currentUser.uid}`).once('value')
             .then((snapshot) => {
@@ -2757,8 +2879,27 @@
                 let amortizedTotal = 0;
                 let amortizedItems = [];
                 let fullyAmortizedItems = [];
+                const today = new Date();
+                const currentYear = today.getFullYear();
+                const currentMonth = today.getMonth() + 1;
                 
-                let debts = [];
+                // Função para verificar se uma parcela já foi paga
+                function isInstallmentPaid(expense, year, month, installment) {
+                    if (expense.paidInstallments) {
+                        return expense.paidInstallments[`${year}-${month}-${installment}`] || false;
+                    }
+                    return false;
+                }
+                
+                function isFixedPaid(expense, year, month) {
+                    if (expense.paidMonths) {
+                        return expense.paidMonths[`${year}-${month}`] || false;
+                    }
+                    return false;
+                }
+                
+                // Coleta TODAS as dívidas do devedor
+                let allDebts = [];
                 
                 const cardTypes = ['sicredi', 'porto', 'mp'];
                 cardTypes.forEach(cardType => {
@@ -2767,32 +2908,43 @@
                             if (!expense.hidden && expense.observation === debtor) {
                                 const dueDates = calculateDueDates(expense.date, expense.closingDay, cardType, expense.installments);
                                 dueDates.forEach(dueDate => {
-                                    if (dueDate.month === month && dueDate.year === year) {
-                                        const paid = expense.paidInstallments && expense.paidInstallments[`${year}-${month}-${dueDate.installment}`];
-                                        if (!paid) {
-                                            let amortizedAmount = 0;
-                                            const amortKey = `${year}-${month}-${dueDate.installment}`;
-                                            if (expense.amortizations && expense.amortizations[amortKey]) {
-                                                amortizedAmount = expense.amortizations[amortKey].amount || 0;
+                                    const { year, month, installment } = dueDate;
+                                    const isPaid = isInstallmentPaid(expense, year, month, installment);
+                                    
+                                    if (!isPaid) {
+                                        let amortizedAmount = 0;
+                                        const amortKey = `${year}-${month}-${installment}`;
+                                        if (expense.amortizations && expense.amortizations[amortKey]) {
+                                            amortizedAmount = expense.amortizations[amortKey].amount || 0;
+                                        }
+                                        const currentValue = expense.value - amortizedAmount;
+                                        
+                                        if (currentValue > 0) {
+                                            let status = 'futuro';
+                                            if (year < currentYear || (year === currentYear && month < currentMonth)) {
+                                                status = 'atrasado';
+                                            } else if (year === currentYear && month === currentMonth) {
+                                                status = 'atual';
                                             }
-                                            const currentValue = expense.value - amortizedAmount;
-                                            if (currentValue > 0) {
-                                                debts.push({
-                                                    name: expense.name,
-                                                    installment: dueDate.installment,
-                                                    totalInstallments: expense.installments,
-                                                    originalValue: expense.value,
-                                                    currentValue: currentValue,
-                                                    cardType: cardType,
-                                                    expenseKey: key,
-                                                    dueDate: dueDate,
-                                                    amortKey: amortKey,
-                                                    path: `${cardType}Expenses/${key}/amortizations/${amortKey}`,
-                                                    paidPath: `${cardType}Expenses/${key}/paidInstallments/${year}-${month}-${dueDate.installment}`,
-                                                    paymentDatePath: `${cardType}Expenses/${key}/paymentDates/${year}-${month}-${dueDate.installment}`,
-                                                    isFixed: false
-                                                });
-                                            }
+                                            
+                                            allDebts.push({
+                                                name: expense.name,
+                                                installment: installment,
+                                                totalInstallments: expense.installments,
+                                                originalValue: expense.value,
+                                                currentValue: currentValue,
+                                                cardType: cardType,
+                                                expenseKey: key,
+                                                dueDate: dueDate,
+                                                dueYear: year,
+                                                dueMonth: month,
+                                                amortKey: amortKey,
+                                                path: `${cardType}Expenses/${key}/amortizations/${amortKey}`,
+                                                paidPath: `${cardType}Expenses/${key}/paidInstallments/${year}-${month}-${installment}`,
+                                                paymentDatePath: `${cardType}Expenses/${key}/paymentDates/${year}-${month}-${installment}`,
+                                                isFixed: false,
+                                                status: status
+                                            });
                                         }
                                     }
                                 });
@@ -2807,46 +2959,58 @@
                             if (expense.installments && expense.installments > 1 && expense.purchaseDate) {
                                 const dueDates = calculateDueDates(expense.purchaseDate, 1, 'fixed', expense.installments);
                                 dueDates.forEach(dueDate => {
-                                    if (dueDate.month === month && dueDate.year === year) {
-                                        const paid = expense.paidMonths && expense.paidMonths[`${year}-${month}`];
-                                        if (!paid) {
-                                            let amortizedAmount = 0;
-                                            const amortKey = `${year}-${month}`;
-                                            if (expense.amortizations && expense.amortizations[amortKey]) {
-                                                amortizedAmount = expense.amortizations[amortKey].amount || 0;
+                                    const { year, month, installment } = dueDate;
+                                    const isPaid = isFixedPaid(expense, year, month);
+                                    
+                                    if (!isPaid) {
+                                        let amortizedAmount = 0;
+                                        const amortKey = `${year}-${month}`;
+                                        if (expense.amortizations && expense.amortizations[amortKey]) {
+                                            amortizedAmount = expense.amortizations[amortKey].amount || 0;
+                                        }
+                                        const currentValue = expense.value - amortizedAmount;
+                                        
+                                        if (currentValue > 0) {
+                                            let status = 'futuro';
+                                            if (year < currentYear || (year === currentYear && month < currentMonth)) {
+                                                status = 'atrasado';
+                                            } else if (year === currentYear && month === currentMonth) {
+                                                status = 'atual';
                                             }
-                                            const currentValue = expense.value - amortizedAmount;
-                                            if (currentValue > 0) {
-                                                debts.push({
-                                                    name: expense.name,
-                                                    installment: dueDate.installment,
-                                                    totalInstallments: expense.installments,
-                                                    originalValue: expense.value,
-                                                    currentValue: currentValue,
-                                                    cardType: 'fixed',
-                                                    expenseKey: key,
-                                                    dueDate: dueDate,
-                                                    amortKey: amortKey,
-                                                    path: `fixedExpenses/${key}/amortizations/${amortKey}`,
-                                                    paidPath: `fixedExpenses/${key}/paidMonths/${year}-${month}`,
-                                                    paymentDatePath: `fixedExpenses/${key}/paymentDates/${year}-${month}`,
-                                                    isFixed: true
-                                                });
-                                            }
+                                            
+                                            allDebts.push({
+                                                name: expense.name,
+                                                installment: installment,
+                                                totalInstallments: expense.installments,
+                                                originalValue: expense.value,
+                                                currentValue: currentValue,
+                                                cardType: 'fixed',
+                                                expenseKey: key,
+                                                dueDate: dueDate,
+                                                dueYear: year,
+                                                dueMonth: month,
+                                                amortKey: amortKey,
+                                                path: `fixedExpenses/${key}/amortizations/${amortKey}`,
+                                                paidPath: `fixedExpenses/${key}/paidMonths/${year}-${month}`,
+                                                paymentDatePath: `fixedExpenses/${key}/paymentDates/${year}-${month}`,
+                                                isFixed: true,
+                                                status: status
+                                            });
                                         }
                                     }
                                 });
                             } else {
-                                const paid = expense.paidMonths && expense.paidMonths[`${year}-${month}`];
-                                if (!paid) {
+                                const isPaid = isFixedPaid(expense, currentYear, currentMonth);
+                                if (!isPaid) {
                                     let amortizedAmount = 0;
-                                    const amortKey = `${year}-${month}`;
+                                    const amortKey = `${currentYear}-${currentMonth}`;
                                     if (expense.amortizations && expense.amortizations[amortKey]) {
                                         amortizedAmount = expense.amortizations[amortKey].amount || 0;
                                     }
                                     const currentValue = expense.value - amortizedAmount;
+                                    
                                     if (currentValue > 0) {
-                                        debts.push({
+                                        allDebts.push({
                                             name: expense.name,
                                             installment: 1,
                                             totalInstallments: 1,
@@ -2854,12 +3018,15 @@
                                             currentValue: currentValue,
                                             cardType: 'fixed',
                                             expenseKey: key,
-                                            dueDate: { month: month, year: year, installment: 1 },
+                                            dueDate: { year: currentYear, month: currentMonth, installment: 1 },
+                                            dueYear: currentYear,
+                                            dueMonth: currentMonth,
                                             amortKey: amortKey,
                                             path: `fixedExpenses/${key}/amortizations/${amortKey}`,
-                                            paidPath: `fixedExpenses/${key}/paidMonths/${year}-${month}`,
-                                            paymentDatePath: `fixedExpenses/${key}/paymentDates/${year}-${month}`,
-                                            isFixed: true
+                                            paidPath: `fixedExpenses/${key}/paidMonths/${currentYear}-${currentMonth}`,
+                                            paymentDatePath: `fixedExpenses/${key}/paymentDates/${currentYear}-${currentMonth}`,
+                                            isFixed: true,
+                                            status: 'atual'
                                         });
                                     }
                                 }
@@ -2868,14 +3035,23 @@
                     });
                 }
                 
-                debts.sort((a, b) => a.currentValue - b.currentValue);
+                // ORDENA: atrasadas primeiro, depois atuais, depois futuras
+                allDebts.sort((a, b) => {
+                    const statusOrder = { 'atrasado': 0, 'atual': 1, 'futuro': 2 };
+                    if (statusOrder[a.status] !== statusOrder[b.status]) {
+                        return statusOrder[a.status] - statusOrder[b.status];
+                    }
+                    if (a.dueYear !== b.dueYear) return a.dueYear - b.dueYear;
+                    if (a.dueMonth !== b.dueMonth) return a.dueMonth - b.dueMonth;
+                    return a.installment - b.installment;
+                });
                 
-                if (debts.length === 0) {
-                    alert('Não há dívidas pendentes para este devedor no mês selecionado.');
+                if (allDebts.length === 0) {
+                    alert('Não há dívidas pendentes para este devedor.');
                     return;
                 }
                 
-                let totalDebt = debts.reduce((sum, d) => sum + d.currentValue, 0);
+                let totalDebt = allDebts.reduce((sum, d) => sum + d.currentValue, 0);
                 let remaining = amortizationValue;
                 
                 if (amortizationValue > totalDebt) {
@@ -2885,11 +3061,10 @@
                 }
                 
                 let processedDebts = [];
-                for (const debt of debts) {
+                for (const debt of allDebts) {
                     if (remaining <= 0) break;
                     
                     const toAmortize = Math.min(remaining, debt.currentValue);
-                    const newAmortized = debt.originalValue - (debt.currentValue - toAmortize);
                     const newValue = debt.currentValue - toAmortize;
                     
                     processedDebts.push({
@@ -3088,7 +3263,6 @@
         content.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin fa-2x"></i><p>Carregando extrato...</p></div>';
         modal.show();
         
-        // Busca todos os dados do usuário para gerar o extrato
         database.ref(`users/${currentUser.uid}`).once('value')
             .then((snapshot) => {
                 const userData = snapshot.val();
@@ -3096,7 +3270,6 @@
                 let totalCredit = 0;
                 let totalDebit = 0;
                 
-                // Função para adicionar item ao extrato
                 function addStatementItem(date, description, type, value, details = '') {
                     const item = {
                         date: date,
@@ -3115,14 +3288,12 @@
                     statementItems.push(item);
                 }
                 
-                // Processa gastos fixos do devedor
                 if (userData.fixedExpenses) {
                     Object.entries(userData.fixedExpenses).forEach(([key, expense]) => {
                         if (expense.observation === debtor) {
                             const createdDate = new Date(expense.createdAt);
                             const cardTypeName = 'Fixo';
                             
-                            // Criação do gasto
                             addStatementItem(
                                 createdDate.toLocaleDateString('pt-BR'),
                                 `💳 ${cardTypeName} - ${expense.name}`,
@@ -3131,7 +3302,6 @@
                                 `Vencimento: dia ${expense.dueDay}, ${expense.installments > 1 ? expense.installments + ' parcelas' : 'à vista'}`
                             );
                             
-                            // Verifica amortizações
                             if (expense.amortizations) {
                                 Object.entries(expense.amortizations).forEach(([amortKey, amort]) => {
                                     const amortDate = new Date(amort.date);
@@ -3147,7 +3317,6 @@
                                 });
                             }
                             
-                            // Verifica pagamentos
                             if (expense.paidMonths) {
                                 Object.entries(expense.paidMonths).forEach(([monthKey, paid]) => {
                                     if (paid) {
@@ -3169,7 +3338,6 @@
                     });
                 }
                 
-                // Processa cartões de crédito do devedor
                 const cardTypes = ['sicredi', 'porto', 'mp'];
                 const cardNames = {
                     'sicredi': 'Sicredi',
@@ -3184,7 +3352,6 @@
                                 const createdDate = new Date(expense.createdAt);
                                 const cardTypeName = cardNames[cardType];
                                 
-                                // Criação do gasto
                                 addStatementItem(
                                     createdDate.toLocaleDateString('pt-BR'),
                                     `💳 ${cardTypeName} - ${expense.name}`,
@@ -3193,7 +3360,6 @@
                                     `${expense.installments}x de ${formatCurrency(expense.value)}, Data da compra: ${fixLocalDate(expense.date).toLocaleDateString()}`
                                 );
                                 
-                                // Verifica amortizações por parcela
                                 if (expense.amortizations) {
                                     Object.entries(expense.amortizations).forEach(([amortKey, amort]) => {
                                         const amortDate = new Date(amort.date);
@@ -3209,7 +3375,6 @@
                                     });
                                 }
                                 
-                                // Verifica pagamentos por parcela
                                 if (expense.paidInstallments) {
                                     Object.entries(expense.paidInstallments).forEach(([installmentKey, paid]) => {
                                         if (paid) {
@@ -3232,14 +3397,12 @@
                     }
                 });
                 
-                // Ordena por data (mais recente primeiro)
                 statementItems.sort((a, b) => {
                     const dateA = a.date.split('/').reverse().join('-');
                     const dateB = b.date.split('/').reverse().join('-');
                     return dateB.localeCompare(dateA);
                 });
                 
-                // Gera o HTML do extrato
                 let html = `
                     <div class="statement-header">
                         <div class="row">
